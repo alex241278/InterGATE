@@ -37,8 +37,8 @@ except ImportError as exc:  # pragma: no cover
     raise SystemExit("Falta requests. Instala dependencias con: pip install -e .") from exc
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_RECORD_ID = "20815745"
-DEFAULT_DOI = "10.5281/zenodo.20815745"
+DEFAULT_RECORD_ID = "20817487"
+DEFAULT_DOI = "10.5281/zenodo.20817487"
 
 REQUIRED_PROCESSED = {
     "expr_combat_corrected.csv": [
