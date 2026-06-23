@@ -12,8 +12,8 @@ InterGATE is a modular graph neural network pipeline for supervised learning of 
 The data source configured for this package is:
 
 ```text
-DOI: 10.5281/zenodo.19476488
-Zenodo record id: 19476488
+DOI: 10.5281/zenodo.20815745
+Zenodo record id: 20815745
 ```
 
 ## Quick start
@@ -71,7 +71,7 @@ bash scripts/run_backbone_ablation.sh
 # or: make backbones
 ```
 
-This executes `notebooks/7_Backbone_Ablation.ipynb` and writes results under `artifacts_backbone_ablation/`.
+This executes `notebooks/7_Backbone_Ablation.ipynb` and writes results under `artifacts_backbone_ablation/`. The paper-aligned backbone diagnostic supplied with this release is documented in `docs/BACKBONE_ABLATION.md`.
 
 ## Required data files
 
@@ -114,7 +114,7 @@ The repository contains two distinct graph-comparison layers.
 
 1. `intergate.backbone_ablation` is an internal architecture ablation. It keeps the InterGATE sparse graph-learning protocol active and only swaps the message-passing block used inside `ImprovedSharedGraphGNN`. The implemented drop-in blocks are weighted GraphSAGE, weighted GIN and a local graph-transformer-style block. Use this analysis to test whether the ResGAT backbone is the best choice inside the proposed framework.
 
-2. `intergate.benchmarks` and `intergate.benchmarks_gnn_baselines` are fixed-prior graph controls. In these controls, graph learning is disabled and the biological prior is held fixed. These rows answer a different question: whether ordinary message passing on a fixed prior is sufficient.
+2. `intergate.benchmarks` and `intergate.benchmarks_gnn_baselines` are fixed-prior graph controls. In these controls, graph learning is disabled and the biological prior is held fixed. These rows answer a different question: whether ordinary message passing on a fixed prior is sufficient. The fixed-prior GraphSAGE/GIN/GraphTransformer run-level CSVs used for the supplementary backbone-control table are stored under `docs/`.
 
 Do not merge both result families into a single row set without labelling them clearly. Backbone-replacement rows are ablation results; fixed-prior rows are external graph-control baselines.
 
@@ -152,7 +152,7 @@ The package follows standard computational reproducibility practices: relative p
 Use the Zenodo DOI for the data:
 
 ```text
-10.5281/zenodo.19476488
+10.5281/zenodo.20815745
 ```
 
 A software citation file is provided in `CITATION.cff` and points to the public repository URL.

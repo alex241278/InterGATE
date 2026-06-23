@@ -2,7 +2,7 @@
 """Download and arrange InterGATE data from Zenodo.
 
 Default DOI / record:
-    https://doi.org/10.5281/zenodo.19476488
+    https://doi.org/10.5281/zenodo.20815745
 
 The script downloads every file attached to the Zenodo record, verifies MD5
 checksums when Zenodo exposes them, optionally extracts archives, and then tries
@@ -34,8 +34,8 @@ except ImportError as exc:  # pragma: no cover
     raise SystemExit("Falta requests. Instala dependencias con: pip install -e .") from exc
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_RECORD_ID = "19476488"
-DEFAULT_DOI = "10.5281/zenodo.19476488"
+DEFAULT_RECORD_ID = "20815745"
+DEFAULT_DOI = "10.5281/zenodo.20815745"
 
 REQUIRED_PROCESSED = {
     "expr_combat_corrected.csv": [
@@ -248,7 +248,7 @@ def write_manifest(record: dict, downloaded: list[Path], arranged: dict, data_ro
 
 def main(argv: Optional[list[str]] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--record-id", default=DEFAULT_RECORD_ID, help="Zenodo record id; default: 19476488")
+    ap.add_argument("--record-id", default=DEFAULT_RECORD_ID, help="Zenodo record id; default: 20815745")
     ap.add_argument("--raw-dir", type=Path, default=PROJECT_ROOT / "data" / "raw")
     ap.add_argument("--processed-dir", type=Path, default=PROJECT_ROOT / "data" / "processed")
     ap.add_argument("--external-dir", type=Path, default=PROJECT_ROOT / "data" / "external")

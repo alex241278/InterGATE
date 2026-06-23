@@ -1,48 +1,43 @@
-# Backbone ablation and fixed-prior graph controls
+# Backbone-replacement diagnostic
 
-This note documents the integration of the backbone add-on into the self-contained `intergate` package.
+This note documents the backbone add-on integrated into the self-contained `intergate` package and clarifies how the results should be interpreted in the manuscript and supplementary material.
 
 ## What was integrated
 
-The add-on was not copied verbatim because it was still named `breastgnn`, included executed notebooks and contained local absolute paths. The GitHub-ready integration ports only the reusable components into the `intergate` namespace:
+The add-on was not copied verbatim because it was still named `breastgnn`, included executed notebooks and contained local absolute paths. The GitHub-ready integration ports the reusable components into the `intergate` namespace:
 
-- `intergate.backbone_blocks`: weighted GraphSAGE, weighted GIN and local graph-transformer-style message-passing blocks with the same forward API as `ResGATBlock`.
-- `intergate.backbone_ablation`: a wrapper that temporarily patches `intergate.model.ResGATBlock` during model construction, so the rest of the InterGATE protocol remains unchanged.
-- `intergate.benchmarks_gnn_baselines`: optional PyG fixed-prior GIN and GraphTransformer controls that complement the existing GraphSAGE control.
-- `notebooks/7_Backbone_Ablation.ipynb`: a clean, output-free notebook for running the internal backbone-replacement ablation.
+- `intergate.backbone_blocks`: weighted GraphSAGE, weighted GIN and graph-transformer-style message-passing blocks with the same forward API expected by the InterGATE model code.
+- `intergate.backbone_ablation`: utilities for running a backbone-replacement diagnostic while keeping the rest of the FULL InterGATE protocol active.
+- `notebooks/7_Backbone_Ablation.ipynb`: an output-free notebook for running the internal backbone-replacement analysis.
+- `scripts/run_backbone_ablation.sh`: shell entry point for the optional diagnostic.
 
-## Conceptual separation
+## Conceptual interpretation
 
-There are two different analyses and they should not be merged without labelling them clearly.
+The rows `FULL_GAT`, `FULL_GRAPHSAGE`, `FULL_GIN`, and `FULL_GRAPH_TRANSFORMER` correspond to an internal backbone-replacement diagnostic. They are not fixed-prior graph baselines.
 
-### 1. Internal backbone-replacement ablation
+In this diagnostic, the FULL InterGATE protocol remains active: typed edge calibration, sample-conditioned gates, hard TopK sparsification, graph compaction and the hybrid head are kept, while only the message-passing backbone is changed.
 
-This analysis asks whether the ResGAT message-passing block is the best backbone inside the proposed sparse graph-learning framework. Gate learning, typed edge calibration, sample-conditioned gates, hard TopK pruning, stability/fine-tuning logic and the hybrid head remain active. Only the message-passing block changes.
+The results supplied for the manuscript used seed 1 only. Therefore, they should be interpreted as an architectural diagnostic that supports the primary ResGAT/GAT choice, not as a replacement for the full stability-selected 291-gene consensus model.
 
-This is the correct interpretation of rows such as `FULL_GAT`, `FULL_GRAPHSAGE`, `FULL_GIN` and `FULL_GRAPH_TRANSFORMER` produced by `intergate.backbone_ablation`.
+## Paper-aligned result summary
 
-### 2. Fixed-prior graph controls
+| Configuration | Backbone | Seed | Phase-1 val macro-F1 | Final edges | Compact genes | Test accuracy | Test macro-F1 | Test weighted-F1 | Test OvR macro-AUC |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `FULL_GAT` | GAT/ResGAT | 1 | 0.864 | 205 | 264 | 0.925 | 0.924 | 0.927 | 0.993 |
+| `FULL_GRAPH_TRANSFORMER` | GraphTransformer | 1 | 0.686 | 205 | 304 | 0.857 | 0.841 | 0.862 | 0.976 |
+| `FULL_GIN` | GIN | 1 | 0.682 | 205 | 343 | 0.857 | 0.834 | 0.862 | 0.973 |
+| `FULL_GRAPHSAGE` | GraphSAGE | 1 | 0.708 | 205 | 271 | 0.848 | 0.830 | 0.851 | 0.974 |
 
-This analysis asks whether ordinary message passing on the fixed biological prior is sufficient without supervised topology learning. In these controls, edge gates are not learned and the graph is held fixed. These rows belong with other benchmark controls, not with the internal architecture ablation.
+The associated raw files are:
 
-## Coherence of the observed outputs supplied with the add-on
+- `docs/backbone_ablation_meta.json`
+- `docs/backbone_ablation_results.csv`
+- `docs/backbone_ablation_summary.csv`
 
-The saved executed add-on notebooks contained two different result families.
+## Manuscript placement
 
-1. A `FULL_GAT` bundle evaluated with validation-optimized one-vs-rest thresholds produced a compact model with 264 genes and an external-test macro-F1 of approximately 0.923. This is coherent with the main InterGATE result because it is close to the reported primary performance, but it should not replace the final 291-gene consensus result unless the exact same consensus/stability and decision-rule protocol is used.
+The recommended placement is:
 
-2. The simple fixed-prior GNN baseline cell produced much lower mean external-test macro-F1 values across seeds: GraphSAGE about 0.496, GIN about 0.302 and GraphTransformer about 0.536. These values should not replace the manuscript benchmark table if the manuscript table was produced with a different validated fixed-prior protocol. They are useful as a diagnostic showing that a simple fixed-prior PyG implementation is weak under this split, but they are not interchangeable with internal backbone-ablation results.
-
-## Recommended reporting
-
-For the manuscript/supplementary material, report the backbone-replacement analysis as an internal ablation. A suitable wording is:
-
-> We further evaluated whether the observed performance depended on the residual graph-attention message-passing backbone. We repeated the InterGATE sparse graph-learning protocol while replacing the ResGAT block with weighted GraphSAGE, weighted GIN, or a local graph-transformer-style block. Because typed edge calibration, sample-conditioned gates, hard sparsification and the hybrid fine-tuning head remained active, this experiment should be interpreted as an internal backbone ablation rather than as a fixed-prior GNN baseline.
-
-## Key references
-
-- Veličković et al. introduced Graph Attention Networks, which motivate the attention-based backbone family used by ResGAT.
-- Hamilton et al. introduced GraphSAGE, used here as a mean-aggregation backbone/control family.
-- Xu et al. introduced GIN, used here as a sum-aggregation backbone/control family.
-- Dwivedi and Bresson, and Shi et al., are commonly cited for graph-transformer-style message passing.
-- Meinshausen and Bühlmann introduced stability selection, which motivates consensus graph selection.
+- Main manuscript: brief Methods and Discussion mention only.
+- Supplementary material: one table reporting the backbone-replacement diagnostic.
+- The primary model remains the stability-selected InterGATE/FULL ResGAT configuration with 291 retained genes.

@@ -40,9 +40,9 @@ class InterGATEConfig:
 
     # ── Repository / data paths ─────────────────────────────
     PROJECT_ROOT: Path = PROJECT_ROOT
-    ZENODO_DOI: str = "10.5281/zenodo.19476488"
-    ZENODO_RECORD_ID: str = "19476488"
-    ZENODO_API_URL: str = "https://zenodo.org/api/records/19476488"
+    ZENODO_DOI: str = "10.5281/zenodo.20815745"
+    ZENODO_RECORD_ID: str = "20815745"
+    ZENODO_API_URL: str = "https://zenodo.org/api/records/20815745"
 
     DATA_DIR: Path = DEFAULT_DATA_DIR
     RAW_DATA_DIR: Path = DEFAULT_RAW_DATA_DIR

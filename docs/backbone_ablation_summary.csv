@@ -1,0 +1,5 @@
+cfg,backbone,acc_mean,acc_std,acc_n,macro_f1_mean,macro_f1_std,macro_f1_n,weighted_f1_mean,weighted_f1_std,weighted_f1_n,auc_ovr_macro_mean,auc_ovr_macro_std,auc_ovr_macro_n,val_macro_f1_phase1_mean,val_macro_f1_phase1_std,val_macro_f1_phase1_n,n_nodes_compact_mean,n_nodes_compact_std,n_nodes_compact_n,n_edges_final_mean,n_edges_final_std,n_edges_final_n,stab_mean_jaccard_mean,stab_mean_jaccard_std,stab_mean_jaccard_n,stab_consensus_size_mean,stab_consensus_size_std,stab_consensus_size_n
+FULL_GAT,gat,0.9251184834123223,,1,0.9243931558815367,,1,0.9265648063640282,,1,0.9932130003531607,,1,0.8641034894566643,,1,264.0,,1,205.0,,1,,,0,,,0
+FULL_GRAPH_TRANSFORMER,graph_transformer,0.8568720379146919,,1,0.8406625183901177,,1,0.8617708603114786,,1,0.9757649330717,,1,0.6855943327491236,,1,304.0,,1,205.0,,1,,,0,,,0
+FULL_GIN,gin,0.8568720379146919,,1,0.8337713221921188,,1,0.8615271138720675,,1,0.9730685240613959,,1,0.6821439884959929,,1,343.0,,1,205.0,,1,,,0,,,0
+FULL_GRAPHSAGE,sage,0.8483412322274881,,1,0.8296393716247248,,1,0.8505381208896872,,1,0.9740426380259375,,1,0.7080528754597776,,1,271.0,,1,205.0,,1,,,0,,,0

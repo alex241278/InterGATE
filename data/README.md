@@ -25,7 +25,7 @@ python scripts/00_check_setup.py
 The data DOI configured in `intergate/config.py` is:
 
 ```text
-10.5281/zenodo.19476488
+10.5281/zenodo.20815745
 ```
 
 If Zenodo stores the CSV files with different names, copy or rename them manually to the two required names in `data/processed/`.

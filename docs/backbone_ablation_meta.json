@@ -1,0 +1,28 @@
+{
+  "configs": [
+    "FULL_GAT",
+    "FULL_GRAPHSAGE",
+    "FULL_GIN",
+    "FULL_GRAPH_TRANSFORMER"
+  ],
+  "backbones": [
+    "gat",
+    "sage",
+    "gin",
+    "graph_transformer"
+  ],
+  "seeds": [
+    1
+  ],
+  "elapsed_min": 66.63750400543213,
+  "cfg_globals": {
+    "HIDDEN": 64,
+    "NUM_LAYERS": 3,
+    "NUM_HEADS": 4,
+    "POOL_HEADS": 4,
+    "KEEP_MIN": 0.004,
+    "STAB_KEEP_FINAL": 0.004,
+    "STAB_FREQ_THR": 0.5,
+    "USE_HYBRID_MODEL": true
+  }
+}

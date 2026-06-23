@@ -1,0 +1,5 @@
+cfg,seed,val_macro_f1_phase1,n_edges_final,n_edges_single,n_nodes_compact,use_signed_prior,jaccard_single_vs_final,acc,macro_f1,weighted_f1,auc_ovr_macro,stab_mean_jaccard,stab_std_jaccard,stab_min_jaccard,stab_max_jaccard,stab_to_cons_mean,stab_to_cons_std,stab_n_pairs,stab_consensus_size,backbone
+FULL_GAT,1,0.8641034894566643,205,205,264,True,1.0,0.9251184834123223,0.9243931558815367,0.9265648063640282,0.9932130003531607,,,,,,,0,,gat
+FULL_GRAPHSAGE,1,0.7080528754597776,205,205,271,True,1.0,0.8483412322274881,0.8296393716247248,0.8505381208896872,0.9740426380259375,,,,,,,0,,sage
+FULL_GIN,1,0.6821439884959929,205,205,343,True,1.0,0.8568720379146919,0.8337713221921188,0.8615271138720675,0.9730685240613959,,,,,,,0,,gin
+FULL_GRAPH_TRANSFORMER,1,0.6855943327491236,205,205,304,True,1.0,0.8568720379146919,0.8406625183901177,0.8617708603114786,0.9757649330717,,,,,,,0,,graph_transformer
