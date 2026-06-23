@@ -114,7 +114,7 @@ The repository contains two distinct graph-comparison layers.
 
 1. `intergate.backbone_ablation` is an internal architecture ablation. It keeps the InterGATE sparse graph-learning protocol active and only swaps the message-passing block used inside `ImprovedSharedGraphGNN`. The implemented drop-in blocks are weighted GraphSAGE, weighted GIN and a local graph-transformer-style block. Use this analysis to test whether the ResGAT backbone is the best choice inside the proposed framework.
 
-2. `intergate.benchmarks` and `intergate.benchmarks_gnn_baselines` are fixed-prior graph controls. In these controls, graph learning is disabled and the biological prior is held fixed. These rows answer a different question: whether ordinary message passing on a fixed prior is sufficient. The fixed-prior GraphSAGE/GIN/GraphTransformer run-level CSVs used for the supplementary backbone-control table are stored under `docs/`.
+2. `intergate.benchmarks` and `intergate.benchmarks_gnn_baselines` are fixed-prior graph controls. In these controls, graph learning is disabled and the biological prior is held fixed. These rows answer a different question: whether ordinary message passing on a fixed prior is sufficient. The paper-aligned backbone-replacement CSVs supplied with this release are stored under `docs/`. Fixed-prior graph controls are produced by the benchmark notebooks and should be kept conceptually separate from the backbone-replacement diagnostic.
 
 Do not merge both result families into a single row set without labelling them clearly. Backbone-replacement rows are ablation results; fixed-prior rows are external graph-control baselines.
 
