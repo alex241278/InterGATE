@@ -1,5 +1,5 @@
 # Informative default configuration. Runtime defaults live in intergate/config.py.
-zenodo_doi: "10.5281/zenodo.20815745"
+zenodo_doi: "10.5281/zenodo.20817487"
 paths:
   data_dir: "data/processed"
   raw_data_dir: "data/raw"
