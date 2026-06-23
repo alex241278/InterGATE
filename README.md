@@ -12,8 +12,8 @@ InterGATE is a modular graph neural network pipeline for supervised learning of 
 The data source configured for this package is:
 
 ```text
-DOI: 10.5281/zenodo.20815745
-Zenodo record id: 20815745
+DOI: 10.5281/zenodo.20817487
+Zenodo record id: 20817487
 ```
 
 ## Quick start
@@ -157,7 +157,7 @@ The package follows standard computational reproducibility practices: relative p
 Use the Zenodo DOI for the data:
 
 ```text
-10.5281/zenodo.20815745
+10.5281/zenodo.20817487
 ```
 
 A software citation file is provided in `CITATION.cff` and points to the public repository URL.
