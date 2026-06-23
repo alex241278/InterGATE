@@ -7,6 +7,16 @@ data/processed/expr_combat_corrected.csv
 data/processed/metadata_combined.csv
 ```
 
+For the paper-aligned reproducibility run, the Zenodo download script also arranges the cache and model artifacts under:
+
+```text
+cache/pipeline_cache/backbone__362de41006ca05c1__e71ae7463734.npz
+cache/pipeline_cache/backbone_global__n11907__sig5f9c12d26c9c90d5__op1__huri1__score1__min0p0.npz
+cache/pipeline_cache/HuRI.filtered.with_score.min0.0.impute_median.npz
+cache/pipeline_cache/Xh__0575558be8d8a450__c102b7893b38__2060915c8ab9.npz
+artifacts_ablation/
+```
+
 The external network resources used by the graph constructor are looked up under:
 
 ```text

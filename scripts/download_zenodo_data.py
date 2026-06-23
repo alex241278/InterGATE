@@ -13,6 +13,8 @@ to place the files expected by the pipeline under a self-contained layout:
     data/external/omnipath_interactions.tsv    # optional; can also be downloaded by graph.py
     data/external/HuRI.tsv                     # optional; can also be downloaded by graph.py
     data/external/HuRI.psi                     # optional; can also be downloaded by graph.py
+    cache/pipeline_cache/*.npz                 # paper-aligned graph/cache artifacts
+    artifacts_ablation/                        # paper-aligned model/graph artifacts
 """
 from __future__ import annotations
 
@@ -34,8 +36,8 @@ except ImportError as exc:  # pragma: no cover
     raise SystemExit("Falta requests. Instala dependencias con: pip install -e .") from exc
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_RECORD_ID = "20815745"
-DEFAULT_DOI = "10.5281/zenodo.20815745"
+DEFAULT_RECORD_ID = "20817487"
+DEFAULT_DOI = "10.5281/zenodo.20817487"
 
 REQUIRED_PROCESSED = {
     "expr_combat_corrected.csv": [
@@ -59,6 +61,35 @@ OPTIONAL_EXTERNAL = {
     ],
     "HuRI.tsv": ["HuRI.tsv", "huri.tsv", "*HuRI*.tsv", "*huri*.tsv"],
     "HuRI.psi": ["HuRI.psi", "huri.psi", "*HuRI*.psi", "*huri*.psi"],
+}
+
+# These four files are part of the paper-aligned Zenodo layout.  They are
+# deliberately placed under cache/pipeline_cache/ because intergate.config.CFG
+# uses PROJECT_ROOT/cache/pipeline_cache as the default pipeline cache.
+EXPECTED_PIPELINE_CACHE = {
+    "backbone__362de41006ca05c1__e71ae7463734.npz": [
+        "backbone__362de41006ca05c1__e71ae7463734.npz",
+        "*backbone__362de41006ca05c1__e71ae7463734*.npz",
+    ],
+    "backbone_global__n11907__sig5f9c12d26c9c90d5__op1__huri1__score1__min0p0.npz": [
+        "backbone_global__n11907__sig5f9c12d26c9c90d5__op1__huri1__score1__min0p0.npz",
+        "*backbone_global__n11907__sig5f9c12d26c9c90d5__op1__huri1__score1__min0p0*.npz",
+    ],
+    "HuRI.filtered.with_score.min0.0.impute_median.npz": [
+        "HuRI.filtered.with_score.min0.0.impute_median.npz",
+        "*HuRI.filtered.with_score.min0.0.impute_median*.npz",
+        "*huri.filtered.with_score.min0.0.impute_median*.npz",
+    ],
+    "Xh__0575558be8d8a450__c102b7893b38__2060915c8ab9.npz": [
+        "Xh__0575558be8d8a450__c102b7893b38__2060915c8ab9.npz",
+        "*Xh__0575558be8d8a450__c102b7893b38__2060915c8ab9*.npz",
+    ],
+}
+
+ARTIFACTS_DIR_CANDIDATES = {
+    "artifacts_ablation",
+    "artifacts-ablation",
+    "artifacts ablation",
 }
 
 
@@ -202,9 +233,71 @@ def copy_if_found(roots: Iterable[Path], patterns: list[str], dest: Path) -> boo
     return True
 
 
-def arrange_layout(raw_dir: Path, processed_dir: Path, external_dir: Path) -> dict:
+def _norm_name(name: str) -> str:
+    return name.strip().lower().replace("-", "_").replace(" ", "_")
+
+
+def iter_candidate_dirs(roots: Iterable[Path]) -> Iterable[Path]:
+    seen: set[Path] = set()
+    for root in roots:
+        if not root.exists():
+            continue
+        for p in root.rglob("*"):
+            if p.is_dir() and p not in seen:
+                seen.add(p)
+                yield p
+
+
+def copytree_merge(src: Path, dest: Path) -> bool:
+    """Merge-copy a directory, skipping extraction marker files."""
+    if not src.exists() or not src.is_dir():
+        return False
+    dest.mkdir(parents=True, exist_ok=True)
+    copied = False
+    for item in src.iterdir():
+        if item.name in {".extracted_ok", ".DS_Store"}:
+            continue
+        target = dest / item.name
+        if item.is_dir():
+            copied = copytree_merge(item, target) or copied
+        elif item.is_file():
+            shutil.copy2(item, target)
+            copied = True
+    if copied:
+        print(f"[layout] {dest.relative_to(PROJECT_ROOT)} <= {src}")
+    return copied
+
+
+def find_artifacts_ablation_dir(roots: Iterable[Path]) -> Optional[Path]:
+    dirs = list(iter_candidate_dirs(roots))
+
+    # Prefer an exact directory named artifacts_ablation, including nested
+    # cases such as extracted_archive/artifacts_ablation/.
+    aliases = {_norm_name(x) for x in ARTIFACTS_DIR_CANDIDATES}
+    for d in dirs:
+        if _norm_name(d.name) in aliases:
+            return d
+
+    # If Zenodo provides artifacts_ablation.zip, extraction creates a directory
+    # such as artifacts_ablation__extracted.  Use that directory when no exact
+    # child directory exists.
+    for d in dirs:
+        n = _norm_name(d.name)
+        if n.startswith("artifacts_ablation") and any(d.iterdir()):
+            return d
+
+    return None
+
+
+def arrange_layout(
+    raw_dir: Path,
+    processed_dir: Path,
+    external_dir: Path,
+    pipeline_cache_dir: Path,
+    artifacts_dir: Path,
+) -> dict:
     roots = [raw_dir] + [p for p in raw_dir.iterdir() if p.is_dir()]
-    arranged = {"processed": {}, "external": {}}
+    arranged = {"processed": {}, "external": {}, "pipeline_cache": {}, "artifacts_ablation": None}
 
     for dest_name, patterns in REQUIRED_PROCESSED.items():
         dest = processed_dir / dest_name
@@ -215,6 +308,19 @@ def arrange_layout(raw_dir: Path, processed_dir: Path, external_dir: Path) -> di
         dest = external_dir / dest_name
         ok = copy_if_found(roots, patterns, dest)
         arranged["external"][dest_name] = str(dest) if ok or dest.exists() else None
+
+    pipeline_cache_dir.mkdir(parents=True, exist_ok=True)
+    for dest_name, patterns in EXPECTED_PIPELINE_CACHE.items():
+        dest = pipeline_cache_dir / dest_name
+        ok = copy_if_found(roots, patterns, dest)
+        arranged["pipeline_cache"][dest_name] = str(dest) if ok or dest.exists() else None
+
+    artifact_source = find_artifacts_ablation_dir(roots)
+    if artifact_source is not None:
+        copied = copytree_merge(artifact_source, artifacts_dir)
+        arranged["artifacts_ablation"] = str(artifacts_dir) if copied or artifacts_dir.exists() else None
+    elif artifacts_dir.exists() and any(artifacts_dir.iterdir()):
+        arranged["artifacts_ablation"] = str(artifacts_dir)
 
     return arranged
 
@@ -252,15 +358,25 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--raw-dir", type=Path, default=PROJECT_ROOT / "data" / "raw")
     ap.add_argument("--processed-dir", type=Path, default=PROJECT_ROOT / "data" / "processed")
     ap.add_argument("--external-dir", type=Path, default=PROJECT_ROOT / "data" / "external")
+    ap.add_argument("--cache-dir", type=Path, default=PROJECT_ROOT / "cache" / "pipeline_cache",
+                    help="Destination for paper-aligned pipeline cache .npz files")
+    ap.add_argument("--artifacts-dir", type=Path, default=PROJECT_ROOT / "artifacts_ablation",
+                    help="Destination for paper-aligned ablation/model artifacts")
     ap.add_argument("--extract", action="store_true", help="Extract downloaded archives")
     ap.add_argument("--force", action="store_true", help="Re-download/re-extract files even if they already exist")
     ap.add_argument("--arrange-only", action="store_true", help="Do not download; only arrange files already present under raw-dir")
+    ap.add_argument("--allow-missing-cache", action="store_true",
+                    help="Do not fail if the expected cache/pipeline_cache .npz files are absent")
+    ap.add_argument("--allow-missing-artifacts", action="store_true",
+                    help="Do not fail if artifacts_ablation/ is absent or empty")
     args = ap.parse_args(argv)
 
     raw_dir = args.raw_dir.expanduser().resolve()
     processed_dir = args.processed_dir.expanduser().resolve()
     external_dir = args.external_dir.expanduser().resolve()
-    for d in [raw_dir, processed_dir, external_dir]:
+    pipeline_cache_dir = args.cache_dir.expanduser().resolve()
+    artifacts_dir = args.artifacts_dir.expanduser().resolve()
+    for d in [raw_dir, processed_dir, external_dir, pipeline_cache_dir, artifacts_dir]:
         d.mkdir(parents=True, exist_ok=True)
 
     downloaded: list[Path] = []
@@ -281,10 +397,13 @@ def main(argv: Optional[list[str]] = None) -> int:
         for p in list(downloaded):
             extract_archive(p, raw_dir, force=args.force)
 
-    arranged = arrange_layout(raw_dir, processed_dir, external_dir)
+    arranged = arrange_layout(raw_dir, processed_dir, external_dir, pipeline_cache_dir, artifacts_dir)
     write_manifest(record, downloaded, arranged, PROJECT_ROOT / "data")
 
     required_missing = [name for name in REQUIRED_PROCESSED if not (processed_dir / name).exists()]
+    cache_missing = [name for name in EXPECTED_PIPELINE_CACHE if not (pipeline_cache_dir / name).exists()]
+    artifacts_missing = not (artifacts_dir.exists() and any(artifacts_dir.iterdir()))
+
     if required_missing:
         print("\n[ATENCIÓN] No se han encontrado todos los ficheros procesados requeridos:")
         for name in required_missing:
@@ -292,9 +411,26 @@ def main(argv: Optional[list[str]] = None) -> int:
         print("\nSi los nombres en Zenodo son distintos, copia/renombra manualmente esos CSV a data/processed/.")
         return 2
 
+    if cache_missing and not args.allow_missing_cache:
+        print("\n[ATENCIÓN] Faltan ficheros obligatorios en cache/pipeline_cache/:")
+        for name in cache_missing:
+            print(f"  - {pipeline_cache_dir / name}")
+        print("\nEl registro Zenodo debe contener estos .npz para reproducir el pipeline paper-aligned sin reconstruir cachés.")
+        print("Usa --allow-missing-cache solo si quieres regenerarlos localmente.")
+        return 3
+
+    if artifacts_missing and not args.allow_missing_artifacts:
+        print("\n[ATENCIÓN] No se ha encontrado una carpeta artifacts_ablation/ no vacía.")
+        print(f"  - destino esperado: {artifacts_dir}")
+        print("\nEl registro Zenodo debe contener la carpeta/archivo artifacts_ablation para reproducir las tablas y figuras derivadas.")
+        print("Usa --allow-missing-artifacts solo si quieres regenerarla localmente.")
+        return 4
+
     print("\n[ok] Datos preparados.")
-    print(f"  processed: {processed_dir}")
-    print(f"  external:  {external_dir}")
+    print(f"  processed:       {processed_dir}")
+    print(f"  external:        {external_dir}")
+    print(f"  pipeline cache:  {pipeline_cache_dir}")
+    print(f"  artifacts:       {artifacts_dir}")
     print("Siguiente paso: python scripts/00_check_setup.py")
     return 0
 
