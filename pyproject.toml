@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "intergate"
+version = "1.0.0"
+description = "Self-contained InterGATE pipeline for supervised sparse interactome learning in transcriptomic classification."
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+authors = [
+  {name = "Alejandro Meca"}
+]
+dependencies = [
+  "numpy>=1.24",
+  "pandas>=2.0",
+  "scipy>=1.10",
+  "scikit-learn>=1.3",
+  "statsmodels>=0.14",
+  "matplotlib>=3.7",
+  "networkx>=3.0",
+  "tqdm>=4.66",
+  "requests>=2.31",
+  "pillow>=10.0",
+  "torch>=2.1",
+  "torch-geometric>=2.4",
+  "umap-learn>=0.5",
+  "mygene>=3.2",
+  "gprofiler-official>=1.0",
+  "gseapy>=1.1"
+]
+
+[project.optional-dependencies]
+benchmarks = [
+  "xgboost>=2.0",
+  "catboost>=1.2",
+  "lightgbm>=4.0"
+]
+notebooks = [
+  "jupyterlab>=4.0",
+  "ipykernel>=6.0",
+  "nbconvert>=7.0"
+]
+all = [
+  "xgboost>=2.0",
+  "catboost>=1.2",
+  "lightgbm>=4.0",
+  "jupyterlab>=4.0",
+  "ipykernel>=6.0",
+  "nbconvert>=7.0"
+]
+
+[tool.setuptools.packages.find]
+include = ["intergate*"]

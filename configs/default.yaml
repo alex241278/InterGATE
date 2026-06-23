@@ -1,0 +1,23 @@
+# Informative default configuration. Runtime defaults live in intergate/config.py.
+zenodo_doi: "10.5281/zenodo.19476488"
+paths:
+  data_dir: "data/processed"
+  raw_data_dir: "data/raw"
+  external_data_dir: "data/external"
+  cache_root: "cache"
+  artifacts_root: "artifacts_ablation"
+inputs:
+  expression_csv: "expr_combat_corrected.csv"
+  metadata_csv: "metadata_combined.csv"
+columns:
+  sample: "sample"
+  label: "label"
+  cohort: "batch"
+execution_order:
+  - "notebooks/0_Main_Pipeline.ipynb"
+  - "notebooks/1_Results_Bootstrap.ipynb"
+  - "notebooks/2_Ejes_REFINED_AXES.ipynb"
+  - "notebooks/3_Ejes_Figura_residuales.ipynb"
+  - "notebooks/4_Lista_genes_por_eje.ipynb"
+  - "notebooks/5_Bioinformatics_Benchmarks.ipynb"
+  - "notebooks/6_Benchmarks_SOTA.ipynb"
