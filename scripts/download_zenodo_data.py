@@ -15,6 +15,7 @@ to place the files expected by the pipeline under a self-contained layout:
     data/external/HuRI.psi                     # optional; can also be downloaded by graph.py
     cache/pipeline_cache/*.npz                 # paper-aligned graph/cache artifacts
     artifacts_ablation/                        # paper-aligned model/graph artifacts
+    artifacts_backbone_ablation/               # optional/internal backbone-ablation artifacts
 """
 from __future__ import annotations
 
@@ -36,8 +37,8 @@ except ImportError as exc:  # pragma: no cover
     raise SystemExit("Falta requests. Instala dependencias con: pip install -e .") from exc
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_RECORD_ID = "20817487"
-DEFAULT_DOI = "10.5281/zenodo.20817487"
+DEFAULT_RECORD_ID = "20815745"
+DEFAULT_DOI = "10.5281/zenodo.20815745"
 
 REQUIRED_PROCESSED = {
     "expr_combat_corrected.csv": [
@@ -90,6 +91,23 @@ ARTIFACTS_DIR_CANDIDATES = {
     "artifacts_ablation",
     "artifacts-ablation",
     "artifacts ablation",
+}
+
+BACKBONE_ARTIFACTS_DIR_CANDIDATES = {
+    "artifacts_backbone_ablation",
+    "artifact_backbone_ablation",
+    "artifacts-backbone-ablation",
+    "artifact-backbone-ablation",
+    "artifacts backbone ablation",
+    "artifact backbone ablation",
+    "artifacts_back_bone_ablation",
+    "artifact_back_bone_ablation",
+    "artifacts-back-bone-ablation",
+    "artifact-back-bone-ablation",
+    "artifacts back bone ablation",
+    "artifact back bone ablation",
+    "backbone_ablation",
+    "backbone-ablation",
 }
 
 
@@ -268,25 +286,39 @@ def copytree_merge(src: Path, dest: Path) -> bool:
     return copied
 
 
-def find_artifacts_ablation_dir(roots: Iterable[Path]) -> Optional[Path]:
-    dirs = list(iter_candidate_dirs(roots))
+def find_named_artifact_dir(roots: Iterable[Path], candidates: set[str]) -> Optional[Path]:
+    """Find an extracted artifact directory using tolerant aliases.
 
-    # Prefer an exact directory named artifacts_ablation, including nested
-    # cases such as extracted_archive/artifacts_ablation/.
-    aliases = {_norm_name(x) for x in ARTIFACTS_DIR_CANDIDATES}
+    Zenodo archives may contain directories such as ``artifacts_ablation/`` or
+    may themselves be named ``artifacts_ablation.zip``.  After extraction, the
+    latter becomes ``artifacts_ablation__extracted``.  This helper handles both
+    cases and also tolerates hyphens/spaces/minor singular/plural variants.
+    """
+    dirs = list(iter_candidate_dirs(roots))
+    aliases = {_norm_name(x) for x in candidates}
+
+    # Prefer exact aliases, including nested cases such as
+    # extracted_archive/artifacts_ablation/.
     for d in dirs:
         if _norm_name(d.name) in aliases:
             return d
 
-    # If Zenodo provides artifacts_ablation.zip, extraction creates a directory
-    # such as artifacts_ablation__extracted.  Use that directory when no exact
-    # child directory exists.
+    # Then accept extracted archive directories whose name starts with one of
+    # the aliases, e.g. artifacts_back_bone_ablation__extracted/.
     for d in dirs:
         n = _norm_name(d.name)
-        if n.startswith("artifacts_ablation") and any(d.iterdir()):
+        if any(n.startswith(alias) for alias in aliases) and any(d.iterdir()):
             return d
 
     return None
+
+
+def find_artifacts_ablation_dir(roots: Iterable[Path]) -> Optional[Path]:
+    return find_named_artifact_dir(roots, ARTIFACTS_DIR_CANDIDATES)
+
+
+def find_backbone_artifacts_dir(roots: Iterable[Path]) -> Optional[Path]:
+    return find_named_artifact_dir(roots, BACKBONE_ARTIFACTS_DIR_CANDIDATES)
 
 
 def arrange_layout(
@@ -295,9 +327,16 @@ def arrange_layout(
     external_dir: Path,
     pipeline_cache_dir: Path,
     artifacts_dir: Path,
+    backbone_artifacts_dir: Path,
 ) -> dict:
     roots = [raw_dir] + [p for p in raw_dir.iterdir() if p.is_dir()]
-    arranged = {"processed": {}, "external": {}, "pipeline_cache": {}, "artifacts_ablation": None}
+    arranged = {
+        "processed": {},
+        "external": {},
+        "pipeline_cache": {},
+        "artifacts_ablation": None,
+        "artifacts_backbone_ablation": None,
+    }
 
     for dest_name, patterns in REQUIRED_PROCESSED.items():
         dest = processed_dir / dest_name
@@ -321,6 +360,13 @@ def arrange_layout(
         arranged["artifacts_ablation"] = str(artifacts_dir) if copied or artifacts_dir.exists() else None
     elif artifacts_dir.exists() and any(artifacts_dir.iterdir()):
         arranged["artifacts_ablation"] = str(artifacts_dir)
+
+    backbone_artifact_source = find_backbone_artifacts_dir(roots)
+    if backbone_artifact_source is not None:
+        copied = copytree_merge(backbone_artifact_source, backbone_artifacts_dir)
+        arranged["artifacts_backbone_ablation"] = str(backbone_artifacts_dir) if copied or backbone_artifacts_dir.exists() else None
+    elif backbone_artifacts_dir.exists() and any(backbone_artifacts_dir.iterdir()):
+        arranged["artifacts_backbone_ablation"] = str(backbone_artifacts_dir)
 
     return arranged
 
@@ -362,6 +408,8 @@ def main(argv: Optional[list[str]] = None) -> int:
                     help="Destination for paper-aligned pipeline cache .npz files")
     ap.add_argument("--artifacts-dir", type=Path, default=PROJECT_ROOT / "artifacts_ablation",
                     help="Destination for paper-aligned ablation/model artifacts")
+    ap.add_argument("--backbone-artifacts-dir", type=Path, default=PROJECT_ROOT / "artifacts_backbone_ablation",
+                    help="Destination for backbone-replacement ablation artifacts")
     ap.add_argument("--extract", action="store_true", help="Extract downloaded archives")
     ap.add_argument("--force", action="store_true", help="Re-download/re-extract files even if they already exist")
     ap.add_argument("--arrange-only", action="store_true", help="Do not download; only arrange files already present under raw-dir")
@@ -369,6 +417,8 @@ def main(argv: Optional[list[str]] = None) -> int:
                     help="Do not fail if the expected cache/pipeline_cache .npz files are absent")
     ap.add_argument("--allow-missing-artifacts", action="store_true",
                     help="Do not fail if artifacts_ablation/ is absent or empty")
+    ap.add_argument("--allow-missing-backbone-artifacts", action="store_true",
+                    help="Do not fail if artifacts_backbone_ablation/ is absent or empty")
     args = ap.parse_args(argv)
 
     raw_dir = args.raw_dir.expanduser().resolve()
@@ -376,7 +426,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     external_dir = args.external_dir.expanduser().resolve()
     pipeline_cache_dir = args.cache_dir.expanduser().resolve()
     artifacts_dir = args.artifacts_dir.expanduser().resolve()
-    for d in [raw_dir, processed_dir, external_dir, pipeline_cache_dir, artifacts_dir]:
+    backbone_artifacts_dir = args.backbone_artifacts_dir.expanduser().resolve()
+    for d in [raw_dir, processed_dir, external_dir, pipeline_cache_dir, artifacts_dir, backbone_artifacts_dir]:
         d.mkdir(parents=True, exist_ok=True)
 
     downloaded: list[Path] = []
@@ -397,12 +448,13 @@ def main(argv: Optional[list[str]] = None) -> int:
         for p in list(downloaded):
             extract_archive(p, raw_dir, force=args.force)
 
-    arranged = arrange_layout(raw_dir, processed_dir, external_dir, pipeline_cache_dir, artifacts_dir)
+    arranged = arrange_layout(raw_dir, processed_dir, external_dir, pipeline_cache_dir, artifacts_dir, backbone_artifacts_dir)
     write_manifest(record, downloaded, arranged, PROJECT_ROOT / "data")
 
     required_missing = [name for name in REQUIRED_PROCESSED if not (processed_dir / name).exists()]
     cache_missing = [name for name in EXPECTED_PIPELINE_CACHE if not (pipeline_cache_dir / name).exists()]
     artifacts_missing = not (artifacts_dir.exists() and any(artifacts_dir.iterdir()))
+    backbone_artifacts_missing = not (backbone_artifacts_dir.exists() and any(backbone_artifacts_dir.iterdir()))
 
     if required_missing:
         print("\n[ATENCIÓN] No se han encontrado todos los ficheros procesados requeridos:")
@@ -426,11 +478,20 @@ def main(argv: Optional[list[str]] = None) -> int:
         print("Usa --allow-missing-artifacts solo si quieres regenerarla localmente.")
         return 4
 
+    if backbone_artifacts_missing and not args.allow_missing_backbone_artifacts:
+        print("\n[ATENCIÓN] No se ha encontrado una carpeta artifacts_backbone_ablation/ no vacía.")
+        print(f"  - destino esperado: {backbone_artifacts_dir}")
+        print("\nEl registro Zenodo debe contener la carpeta/archivo de ablación de backbones")
+        print("(por ejemplo artifacts_backbone_ablation/ o artifact_back_bone_ablation/) para reproducir ST6.")
+        print("Usa --allow-missing-backbone-artifacts solo si quieres regenerarla localmente.")
+        return 5
+
     print("\n[ok] Datos preparados.")
     print(f"  processed:       {processed_dir}")
     print(f"  external:        {external_dir}")
     print(f"  pipeline cache:  {pipeline_cache_dir}")
     print(f"  artifacts:       {artifacts_dir}")
+    print(f"  backbone arts.:  {backbone_artifacts_dir}")
     print("Siguiente paso: python scripts/00_check_setup.py")
     return 0
 

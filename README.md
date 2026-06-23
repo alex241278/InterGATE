@@ -85,9 +85,10 @@ cache/pipeline_cache/backbone_global__n11907__sig5f9c12d26c9c90d5__op1__huri1__s
 cache/pipeline_cache/HuRI.filtered.with_score.min0.0.impute_median.npz
 cache/pipeline_cache/Xh__0575558be8d8a450__c102b7893b38__2060915c8ab9.npz
 artifacts_ablation/
+artifacts_backbone_ablation/
 ```
 
-The download script attempts to find these files automatically inside the Zenodo record or its extracted archives. It copies the processed CSVs to `data/processed/`, the paper-aligned cache files to `cache/pipeline_cache/`, and the ablation/model artifacts to the root-level `artifacts_ablation/` directory. If the processed CSV names in Zenodo are slightly different, the script searches common alternatives and normalizes the layout. If automatic detection fails, manually copy or rename the files to the paths above.
+The download script attempts to find these files automatically inside the Zenodo record or its extracted archives. It copies the processed CSVs to `data/processed/`, the paper-aligned cache files to `cache/pipeline_cache/`, the ablation/model artifacts to the root-level `artifacts_ablation/` directory, and the backbone-replacement ablation artifacts to the root-level `artifacts_backbone_ablation/` directory. The source archive/directory may also be named `artifact_back_bone_ablation`; the script normalizes it to `artifacts_backbone_ablation/`. If the processed CSV names in Zenodo are slightly different, the script searches common alternatives and normalizes the layout. If automatic detection fails, manually copy or rename the files to the paths above.
 
 ## Optional external graph resources
 
@@ -135,6 +136,7 @@ export INTERGATE_RAW_DATA_DIR=/path/to/raw_zenodo_files
 export INTERGATE_EXTERNAL_DATA_DIR=/path/to/external_graph_files
 export INTERGATE_CACHE_ROOT=/path/to/cache
 export INTERGATE_ARTIFACTS_ROOT=/path/to/artifacts_ablation
+# Backbone ablation artifacts are expected at ./artifacts_backbone_ablation/
 ```
 
 ## Validation checklist

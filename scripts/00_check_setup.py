@@ -41,6 +41,7 @@ def main() -> int:
     print(f"CACHE_ROOT:   {CFG.CACHE_ROOT}")
     print(f"PIPELINE:     {CFG.PIPELINE_CACHE_DIR}")
     print(f"ARTIFACTS:    {CFG.ARTIFACTS_ROOT}")
+    print(f"BACKBONES:    {PROJECT_ROOT / 'artifacts_backbone_ablation'}")
     print("")
 
     ok = True
@@ -59,6 +60,9 @@ def main() -> int:
 
     print("\nPaper-aligned model artifacts:")
     ok &= check_dir_nonempty(Path(CFG.ARTIFACTS_ROOT), required=True)
+
+    print("\nBackbone-replacement ablation artifacts:")
+    ok &= check_dir_nonempty(PROJECT_ROOT / "artifacts_backbone_ablation", required=True)
 
     if not ok:
         print("\nFaltan datos/cache/artifacts obligatorios. Ejecuta:")

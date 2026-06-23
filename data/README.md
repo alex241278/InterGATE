@@ -15,7 +15,12 @@ cache/pipeline_cache/backbone_global__n11907__sig5f9c12d26c9c90d5__op1__huri1__s
 cache/pipeline_cache/HuRI.filtered.with_score.min0.0.impute_median.npz
 cache/pipeline_cache/Xh__0575558be8d8a450__c102b7893b38__2060915c8ab9.npz
 artifacts_ablation/
+artifacts_backbone_ablation/
 ```
+
+If Zenodo stores the backbone-ablation archive using a variant such as
+`artifact_back_bone_ablation`, `download_zenodo_data.py --extract` normalizes it
+to the root-level directory `artifacts_backbone_ablation/`.
 
 The external network resources used by the graph constructor are looked up under:
 
