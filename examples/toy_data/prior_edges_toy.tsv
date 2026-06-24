@@ -1,0 +1,7 @@
+source	target	type	weight	directed
+ESR1	GATA3	activation	1.0	True
+ERBB2	GRB7	activation	1.0	True
+EGFR	KRT6A	activation	1.0	True
+TP53	ESR1	inhibition	-1.0	True
+CXCL9	EGFR	activation	0.8	True
+GATA3	ERBB2	physical	1.0	False

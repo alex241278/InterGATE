@@ -1,4 +1,4 @@
-.PHONY: install data check smoke notebooks backbones clean
+.PHONY: install data check smoke toy notebooks backbones clean
 
 install:
 	pip install -e ".[all]"
@@ -11,6 +11,9 @@ check:
 
 smoke:
 	python scripts/01_smoke_test.py
+
+toy:
+	python scripts/02_run_toy_example.py
 
 notebooks:
 	bash scripts/run_notebooks.sh

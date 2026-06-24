@@ -9,7 +9,7 @@ description = "Self-contained InterGATE pipeline for supervised sparse interacto
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
 authors = [
-  {name = "Alejandro Meca"}
+  {name = "Alejandro Alvaro-Meca"}
 ]
 dependencies = [
   "numpy>=1.24",

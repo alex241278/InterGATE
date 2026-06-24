@@ -39,7 +39,14 @@ Use Python 3.10 or 3.11. The package metadata intentionally excludes Python 3.13
 
 For GPU runs, install the PyTorch and PyTorch Geometric builds that match your CUDA version before running the notebooks.
 
-Download and arrange the data:
+Run the offline self-contained checks first. These commands do not require the Zenodo manuscript data or network access after installation:
+
+```bash
+python scripts/01_smoke_test.py
+python scripts/02_run_toy_example.py
+```
+
+Download and arrange the manuscript data:
 
 ```bash
 python scripts/download_zenodo_data.py --extract
@@ -109,6 +116,7 @@ make install     # pip install -e .[all]
 make data        # download/extract Zenodo data
 make check       # verify required local layout
 make smoke       # import package modules and check notebook metadata
+make toy         # run the bundled offline toy data/edge-list check
 make notebooks   # execute main notebooks in order
 make backbones   # execute optional backbone-ablation notebook
 make clean       # remove Python caches
@@ -152,7 +160,7 @@ The smoke test checks that core package modules import correctly and that notebo
 
 ## Reproducibility notes
 
-The package follows standard computational reproducibility practices: relative paths, explicit environment files, stable data DOI, checksum manifest, notebook execution order and local cache/artifact directories. The file `REFERENCES.bib` includes methodological and software references relevant to FAIR/reproducible workflows, HuRI, OmniPath, PyTorch and PyTorch Geometric.
+The package follows standard computational reproducibility practices: relative paths, explicit environment files, stable data DOI, checksum manifest, notebook execution order and local cache/artifact directories. The file `docs/REPRODUCIBILITY_CHECKLIST.md` separates offline self-contained checks from full manuscript reproduction after Zenodo download. The file `REFERENCES.bib` includes methodological and software references relevant to FAIR/reproducible workflows, HuRI, OmniPath, PyTorch and PyTorch Geometric.
 
 ## Citation
 

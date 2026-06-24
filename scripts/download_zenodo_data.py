@@ -400,7 +400,7 @@ def write_manifest(record: dict, downloaded: list[Path], arranged: dict, data_ro
 
 def main(argv: Optional[list[str]] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--record-id", default=DEFAULT_RECORD_ID, help="Zenodo record id; default: 20815745")
+    ap.add_argument("--record-id", default=DEFAULT_RECORD_ID, help="Zenodo record id; default: 20817487")
     ap.add_argument("--raw-dir", type=Path, default=PROJECT_ROOT / "data" / "raw")
     ap.add_argument("--processed-dir", type=Path, default=PROJECT_ROOT / "data" / "processed")
     ap.add_argument("--external-dir", type=Path, default=PROJECT_ROOT / "data" / "external")

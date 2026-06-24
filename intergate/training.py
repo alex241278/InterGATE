@@ -292,12 +292,11 @@ def train_graph_learning(
                 pass
 
         # schedule tau
-        if epoch <= 10:
-            gate_tau = 0.5
-        elif epoch <= 20:
-            gate_tau = 0.25
-        else:
-            gate_tau = 0.1
+        gate_tau = 0.1
+        for last_epoch, tau_value in getattr(CFG, "GATE_TAU_SCHEDULE", ((10, 0.5), (20, 0.25), (10**9, 0.1))):
+            if epoch <= int(last_epoch):
+                gate_tau = float(tau_value)
+                break
         if hasattr(model, "gate_tau"):
             model.gate_tau = gate_tau
 

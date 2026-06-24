@@ -124,8 +124,8 @@ def plot_components_grid(
 # ============================================================
 OUT_FIG = "./figures_axes_refined/fig_axis_graph_colored_by_axes.png"
 
-BUNDLE_PATH = "./artifacts_ablation/FULL/seed_1234/graph_bundle.pt"   # cambia si lo mueves
-DRAW_DIRECTED = True                       # mejor False para limpio
+BUNDLE_PATH = "./artifacts_ablation/FULL/seed_1234/graph_bundle.pt"
+DRAW_DIRECTED = True
 SHOW_GIANT_COMPONENT = False                 # dibuja solo el componente mayor
 SEED_LAYOUT = 42
 RANDOM_SEED = 42

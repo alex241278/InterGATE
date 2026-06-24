@@ -822,6 +822,146 @@ def build_backbone(
     return edge_index, edge_weight, edge_type
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+#  Generic local edge-list loader for reusable/self-contained runs
+# ═══════════════════════════════════════════════════════════════════════════
+
+def load_edge_list_prior(
+    edge_tsv: Path,
+    genes: List[str],
+    source_col: Optional[str] = None,
+    target_col: Optional[str] = None,
+    weight_col: Optional[str] = None,
+    sign_col: Optional[str] = None,
+    type_col: Optional[str] = None,
+    directed_col: Optional[str] = None,
+    add_reverse_for_undirected: bool = True,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Load a user-supplied prior graph from a TSV/CSV edge list.
+
+    This helper is independent of OmniPath/HuRI downloads. It makes the package
+    usable with the bundled toy prior or with an external disease-specific edge
+    list supplied by the user.
+
+    Expected columns are flexible. Source columns can be named ``source``,
+    ``src``, ``from``, ``regulator`` or ``gene_a``. Target columns can be named
+    ``target``, ``tgt``, ``to``, ``regulated`` or ``gene_b``. Optional columns
+    are ``weight``, ``sign``, ``type`` and ``directed``.
+    """
+    edge_tsv = Path(edge_tsv)
+    if not edge_tsv.exists():
+        raise FileNotFoundError(f"Prior edge list not found: {edge_tsv}")
+
+    df = pd.read_csv(edge_tsv, sep=None, engine="python")
+    if df.empty:
+        return np.zeros((2, 0), np.int64), np.zeros(0, np.float32), np.zeros(0, np.int64)
+
+    cols = {str(c).strip().lower(): c for c in df.columns}
+
+    def pick(explicit: Optional[str], aliases: List[str]) -> str:
+        if explicit:
+            if explicit in df.columns:
+                return explicit
+            key = explicit.strip().lower()
+            if key in cols:
+                return cols[key]
+            raise ValueError(f"Column '{explicit}' not found in {edge_tsv}")
+        for a in aliases:
+            if a in cols:
+                return cols[a]
+        raise ValueError(
+            f"Could not infer source/target columns in {edge_tsv}. "
+            f"Available columns: {list(df.columns)}"
+        )
+
+    src_c = pick(source_col, ["source", "src", "from", "regulator", "gene_a", "gene1"])
+    tgt_c = pick(target_col, ["target", "tgt", "to", "regulated", "gene_b", "gene2"])
+
+    def optional(explicit: Optional[str], aliases: List[str]) -> Optional[str]:
+        if explicit:
+            if explicit in df.columns:
+                return explicit
+            key = explicit.strip().lower()
+            if key in cols:
+                return cols[key]
+            raise ValueError(f"Column '{explicit}' not found in {edge_tsv}")
+        for a in aliases:
+            if a in cols:
+                return cols[a]
+        return None
+
+    weight_c = optional(weight_col, ["weight", "score", "confidence"])
+    sign_c = optional(sign_col, ["sign", "effect", "direction", "interaction_sign"])
+    type_c = optional(type_col, ["type", "edge_type", "interaction", "source_db"])
+    directed_c = optional(directed_col, ["directed", "is_directed"])
+
+    gene_to_idx = {canonical_gene_upper(g): i for i, g in enumerate(genes)}
+
+    def sign_to_float(x) -> float:
+        s = str(x).strip().lower()
+        if s in {"-", "-1", "negative", "inhibition", "inhibitory", "repression", "down"}:
+            return -1.0
+        if s in {"+", "+1", "1", "positive", "activation", "stimulation", "up"}:
+            return 1.0
+        return 1.0
+
+    def type_to_int(type_val, signed_weight: float) -> int:
+        s = str(type_val).strip().lower() if type_val is not None else ""
+        if any(k in s for k in ["inhib", "repress", "negative", "down"]):
+            return 2
+        if any(k in s for k in ["activ", "stim", "positive", "up"]):
+            return 1
+        if signed_weight < 0:
+            return 2
+        if signed_weight > 0 and (sign_c is not None or type_c is not None):
+            return 1
+        return 0
+
+    edges: list[tuple[int, int, float, int]] = []
+    dropped = 0
+    for _, row in df.iterrows():
+        s_name = canonical_gene_upper(row[src_c])
+        t_name = canonical_gene_upper(row[tgt_c])
+        if not s_name or not t_name or s_name not in gene_to_idx or t_name not in gene_to_idx:
+            dropped += 1
+            continue
+        src_i, tgt_i = gene_to_idx[s_name], gene_to_idx[t_name]
+        if src_i == tgt_i:
+            continue
+
+        if weight_c is not None and pd.notna(row[weight_c]):
+            try:
+                w = float(row[weight_c])
+            except Exception:
+                w = 1.0
+        else:
+            w = 1.0
+        if sign_c is not None and pd.notna(row[sign_c]):
+            w = abs(w) * sign_to_float(row[sign_c])
+
+        et = type_to_int(row[type_c] if type_c is not None else None, w)
+        edges.append((src_i, tgt_i, w, et))
+
+        if add_reverse_for_undirected and directed_c is not None:
+            directed_value = str(row[directed_c]).strip().lower()
+            if directed_value in {"false", "0", "no", "n", "undirected", "none", "nan"}:
+                edges.append((tgt_i, src_i, w, et))
+
+    if not edges:
+        raise ValueError(
+            f"No usable edges from {edge_tsv}; {dropped} rows did not match the expression genes."
+        )
+
+    edge_index = np.array([[e[0] for e in edges], [e[1] for e in edges]], dtype=np.int64)
+    edge_weight = np.array([e[2] for e in edges], dtype=np.float32)
+    edge_type = np.array([e[3] for e in edges], dtype=np.int64)
+    edge_index, edge_weight, edge_type = dedup_edges(edge_index, edge_weight, edge_type, prefer_type=0)
+    print(f"[edge-list prior] {edge_index.shape[1]} usable edges loaded from {edge_tsv}")
+    if dropped:
+        print(f"[edge-list prior] dropped {dropped} rows with genes absent from expression matrix")
+    return edge_index, edge_weight, edge_type
+
+
 def _print_backbone_summary(
     edge_index: np.ndarray,
     genes: List[str],

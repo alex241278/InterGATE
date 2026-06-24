@@ -40,9 +40,9 @@ class InterGATEConfig:
 
     # ── Repository / data paths ─────────────────────────────
     PROJECT_ROOT: Path = PROJECT_ROOT
-    ZENODO_DOI: str = "10.5281/zenodo.20815745"
-    ZENODO_RECORD_ID: str = "20815745"
-    ZENODO_API_URL: str = "https://zenodo.org/api/records/20815745"
+    ZENODO_DOI: str = "10.5281/zenodo.20817487"
+    ZENODO_RECORD_ID: str = "20817487"
+    ZENODO_API_URL: str = "https://zenodo.org/api/records/20817487"
 
     DATA_DIR: Path = DEFAULT_DATA_DIR
     RAW_DATA_DIR: Path = DEFAULT_RAW_DATA_DIR
@@ -101,8 +101,9 @@ class InterGATEConfig:
     WEIGHT_DECAY: float = 1e-4
 
     # ── Gates / sparsity ──────────────────────────────────
-    GATE_TAU_START: float = 2.0
-    GATE_TAU_END: float = 0.7
+    # Piecewise constant gate-temperature schedule used in Phase 1.
+    # Entries are (last_epoch_inclusive, tau), matching the manuscript/SF3.
+    GATE_TAU_SCHEDULE: Tuple[Tuple[int, float], ...] = ((10, 0.5), (20, 0.25), (10**9, 0.1))
     EDGE_L1_PER_EDGE: float = 1e-5
 
     # ── GNN backbone ──────────────────────────────────────

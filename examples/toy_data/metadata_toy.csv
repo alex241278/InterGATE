@@ -1,0 +1,17 @@
+,sample,label,batch
+0,S1_1,LumA,Cohort_1
+1,S1_2,LumA,Cohort_2
+2,S1_3,LumA,Cohort_1
+3,S1_4,LumA,Cohort_2
+4,S2_1,LumB,Cohort_3
+5,S2_2,LumB,Cohort_4
+6,S2_3,LumB,Cohort_3
+7,S2_4,LumB,Cohort_4
+8,S3_1,HER2,Cohort_5
+9,S3_2,HER2,Cohort_6
+10,S3_3,HER2,Cohort_5
+11,S3_4,HER2,Cohort_6
+12,S4_1,TNBC,Cohort_7
+13,S4_2,TNBC,Cohort_8
+14,S4_3,TNBC,Cohort_7
+15,S4_4,TNBC,Cohort_8

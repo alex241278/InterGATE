@@ -2,11 +2,16 @@ cff-version: 1.2.0
 message: "If you use this code or the accompanying data, please cite the software/repository and the Zenodo dataset."
 title: "InterGATE self-contained reproducibility package"
 authors:
-  - family-names: "Meca"
+  - family-names: "Alvaro-Meca"
     given-names: "Alejandro"
+  - family-names: "Senovilla"
+    given-names: "Laura"
+  - family-names: "Resino"
+    given-names: "Salvador"
 version: "1.0.0"
 date-released: "2026-06-22"
 identifiers:
   - type: doi
     value: "10.5281/zenodo.20817487"
 repository-code: "https://github.com/alex241278/InterGATE"
+license: "MIT"
