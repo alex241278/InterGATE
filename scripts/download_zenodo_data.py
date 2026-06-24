@@ -2,7 +2,7 @@
 """Download and arrange InterGATE data from Zenodo.
 
 Default DOI / record:
-    https://doi.org/10.5281/zenodo.20815745
+    https://doi.org/10.5281/zenodo.20817487
 
 The script downloads every file attached to the Zenodo record, verifies MD5
 checksums when Zenodo exposes them, optionally extracts archives, and then tries
