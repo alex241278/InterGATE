@@ -27,7 +27,7 @@ from typing import Optional, Dict, List
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics import f1_score, classification_report, confusion_matrix, roc_auc_score
+from sklearn.metrics import f1_score, classification_report, confusion_matrix, roc_auc_score, accuracy_score
 import matplotlib.pyplot as plt
 
 
@@ -462,3 +462,220 @@ def bootstrap_auc_ovr_ci(
         }
 
     return out
+
+# ── Paired bootstrap for close baseline comparisons ───────────────────────
+
+def _safe_metric_value(y_true, y_pred=None, proba=None, metric: str = "macro_f1"):
+    """Compute a multiclass metric on a possibly bootstrapped sample.
+
+    This helper is deliberately conservative: AUC is computed one-vs-rest per
+    class and averaged over classes that still contain both positive and
+    negative samples in the bootstrap draw.  This avoids hard failures when a
+    rare class is absent from a particular resample.
+    """
+    y_true = np.asarray(y_true).ravel()
+    metric = str(metric)
+
+    if metric in {"accuracy", "acc"}:
+        if y_pred is None:
+            if proba is None:
+                return np.nan
+            y_pred = np.asarray(proba).argmax(axis=1)
+        return float(accuracy_score(y_true, np.asarray(y_pred).ravel()))
+
+    if metric == "macro_f1":
+        if y_pred is None:
+            if proba is None:
+                return np.nan
+            y_pred = np.asarray(proba).argmax(axis=1)
+        return float(f1_score(y_true, np.asarray(y_pred).ravel(), average="macro", zero_division=0))
+
+    if metric == "weighted_f1":
+        if y_pred is None:
+            if proba is None:
+                return np.nan
+            y_pred = np.asarray(proba).argmax(axis=1)
+        return float(f1_score(y_true, np.asarray(y_pred).ravel(), average="weighted", zero_division=0))
+
+    if metric in {"auc_ovr_macro", "ovr_macro_auc"}:
+        if proba is None:
+            return np.nan
+        proba = np.asarray(proba, dtype=float)
+        if proba.ndim != 2 or proba.shape[0] != y_true.shape[0]:
+            return np.nan
+        unique_labels = np.sort(np.unique(y_true))
+        n_classes = proba.shape[1]
+        if np.array_equal(unique_labels, np.arange(n_classes)):
+            y_enc = y_true.astype(int)
+        else:
+            # In normal use labels are 0..C-1.  For robustness, map observed
+            # labels to their sorted positions only when the count matches.
+            all_labels = np.arange(n_classes)
+            y_enc = y_true.astype(int) if np.all(np.isin(y_true, all_labels)) else y_true
+        aucs = []
+        for c in range(n_classes):
+            y_bin = (y_enc == c).astype(int)
+            if np.unique(y_bin).size < 2:
+                continue
+            try:
+                aucs.append(float(roc_auc_score(y_bin, proba[:, c])))
+            except ValueError:
+                continue
+        return float(np.mean(aucs)) if aucs else np.nan
+
+    raise ValueError(f"Unknown metric: {metric}")
+
+
+def paired_bootstrap_comparison_ci(
+    y_true,
+    reference_output: Dict[str, np.ndarray],
+    comparator_outputs: Dict[str, Dict[str, np.ndarray]],
+    *,
+    reference_name: str = "InterGATE_FULL",
+    metrics=("macro_f1", "accuracy", "auc_ovr_macro"),
+    B: int = 10_000,
+    seed: int = 42,
+    ci=(2.5, 97.5),
+    return_distributions: bool = False,
+):
+    """Paired non-parametric bootstrap CIs for model metrics and deltas.
+
+    Parameters
+    ----------
+    y_true : array-like, shape (n_samples,)
+        Test-set labels.
+    reference_output : dict
+        Output for the reference model. Keys can include ``"y_pred"`` and
+        ``"proba"``.  For macro-F1/accuracy, ``"y_pred"`` is preferred; if it
+        is absent, argmax(``proba``) is used.  For AUC, ``"proba"`` is required.
+    comparator_outputs : dict[str, dict]
+        Mapping from comparator model name to the same output structure.
+    metrics : sequence[str]
+        Supported metrics: ``macro_f1``, ``weighted_f1``, ``accuracy`` and
+        ``auc_ovr_macro``.
+
+    Returns
+    -------
+    dict
+        ``model_metric_ci`` contains point estimates and percentile CIs for the
+        reference and each comparator.  ``paired_delta_ci`` contains paired
+        bootstrap CIs for ``reference - comparator`` on the same resampled test
+        patients.  The ``p_boot_two_sided`` column is a bootstrap sign-probability
+        summary, not a replacement for a pre-specified hypothesis test.
+    """
+    y_true = np.asarray(y_true).ravel()
+    n = y_true.shape[0]
+    if n == 0:
+        raise ValueError("y_true is empty")
+
+    def _normalise_output(name, out):
+        if out is None:
+            raise ValueError(f"Missing output for {name}")
+        y_pred = out.get("y_pred", None)
+        proba = out.get("proba", None)
+        if y_pred is None and proba is not None:
+            y_pred = np.asarray(proba).argmax(axis=1)
+        if y_pred is not None:
+            y_pred = np.asarray(y_pred).ravel()
+            if y_pred.shape[0] != n:
+                raise ValueError(f"{name}.y_pred has length {y_pred.shape[0]}, expected {n}")
+        if proba is not None:
+            proba = np.asarray(proba, dtype=float)
+            if proba.ndim != 2 or proba.shape[0] != n:
+                raise ValueError(f"{name}.proba has shape {proba.shape}, expected ({n}, C)")
+        return {"y_pred": y_pred, "proba": proba}
+
+    outputs = {reference_name: _normalise_output(reference_name, reference_output)}
+    for name, out in comparator_outputs.items():
+        outputs[str(name)] = _normalise_output(str(name), out)
+
+    metrics = tuple(metrics)
+    rng = np.random.default_rng(seed)
+    boot = {
+        name: {metric: np.empty(B, dtype=float) for metric in metrics}
+        for name in outputs
+    }
+
+    # Observed point estimates.
+    observed = {
+        name: {
+            metric: _safe_metric_value(
+                y_true,
+                y_pred=out["y_pred"],
+                proba=out["proba"],
+                metric=metric,
+            )
+            for metric in metrics
+        }
+        for name, out in outputs.items()
+    }
+
+    # Paired resampling: the same patient indices are applied to every model.
+    for b in range(B):
+        idx = rng.integers(0, n, size=n)
+        yt = y_true[idx]
+        for name, out in outputs.items():
+            yp = out["y_pred"][idx] if out["y_pred"] is not None else None
+            pp = out["proba"][idx] if out["proba"] is not None else None
+            for metric in metrics:
+                boot[name][metric][b] = _safe_metric_value(yt, y_pred=yp, proba=pp, metric=metric)
+
+    alpha_low, alpha_high = ci
+
+    metric_rows = []
+    for name in outputs:
+        for metric in metrics:
+            vals = boot[name][metric]
+            vals = vals[~np.isnan(vals)]
+            if vals.size:
+                low, high = np.percentile(vals, [alpha_low, alpha_high])
+            else:
+                low, high = np.nan, np.nan
+            metric_rows.append({
+                "model": name,
+                "metric": metric,
+                "point_estimate": float(observed[name][metric]) if not np.isnan(observed[name][metric]) else np.nan,
+                "ci_low": float(low) if not np.isnan(low) else np.nan,
+                "ci_high": float(high) if not np.isnan(high) else np.nan,
+                "ci_95_percentile": f"[{low:.4f}, {high:.4f}]" if vals.size else "NA",
+                "n_boot_valid": int(vals.size),
+                "n_boot_total": int(B),
+            })
+
+    delta_rows = []
+    for comp_name in comparator_outputs:
+        comp_name = str(comp_name)
+        for metric in metrics:
+            diff_obs = observed[reference_name][metric] - observed[comp_name][metric]
+            diff = boot[reference_name][metric] - boot[comp_name][metric]
+            diff = diff[~np.isnan(diff)]
+            if diff.size:
+                low, high = np.percentile(diff, [alpha_low, alpha_high])
+                p_le0 = np.mean(diff <= 0.0)
+                p_ge0 = np.mean(diff >= 0.0)
+                p_boot = min(1.0, 2.0 * min(p_le0, p_ge0))
+            else:
+                low, high, p_boot = np.nan, np.nan, np.nan
+            delta_rows.append({
+                "reference_model": reference_name,
+                "comparator_model": comp_name,
+                "metric": metric,
+                "reference_point": float(observed[reference_name][metric]) if not np.isnan(observed[reference_name][metric]) else np.nan,
+                "comparator_point": float(observed[comp_name][metric]) if not np.isnan(observed[comp_name][metric]) else np.nan,
+                "delta_reference_minus_comparator": float(diff_obs) if not np.isnan(diff_obs) else np.nan,
+                "delta_ci_low": float(low) if not np.isnan(low) else np.nan,
+                "delta_ci_high": float(high) if not np.isnan(high) else np.nan,
+                "delta_ci_95_percentile": f"[{low:.4f}, {high:.4f}]" if diff.size else "NA",
+                "p_boot_two_sided": float(p_boot) if not np.isnan(p_boot) else np.nan,
+                "n_boot_valid": int(diff.size),
+                "n_boot_total": int(B),
+            })
+
+    result = {
+        "model_metric_ci": pd.DataFrame(metric_rows),
+        "paired_delta_ci": pd.DataFrame(delta_rows),
+    }
+    if return_distributions:
+        result["bootstrap_distributions"] = boot
+    return result
+
