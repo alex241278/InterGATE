@@ -1,25 +1,28 @@
-.PHONY: install data check smoke toy notebooks backbones clean
+PYTHON ?= python
+
+.PHONY: install preflight-data preflight-analysis data analysis all test
 
 install:
-	pip install -e ".[all]"
+	$(PYTHON) -m pip install -e ".[full]"
+
+preflight-data:
+	$(PYTHON) scripts/preflight.py --stage data
+
+preflight-analysis:
+	$(PYTHON) scripts/preflight.py --stage analysis
 
 data:
-	python scripts/download_zenodo_data.py --extract
+	$(PYTHON) scripts/run_pipeline.py data
 
-check:
-	python scripts/00_check_setup.py
+analysis:
+	$(PYTHON) scripts/run_pipeline.py analysis
 
-smoke:
-	python scripts/01_smoke_test.py
+all:
+	$(PYTHON) scripts/run_pipeline.py all
 
-toy:
-	python scripts/02_run_toy_example.py
+test:
+	$(PYTHON) -m compileall -q intergate data_prepare scripts tests
+	$(PYTHON) tests/check_notebook_contract.py
+	$(PYTHON) tests/test_protocol_alignment.py
+	$(PYTHON) tests/test_v6_synthetic.py
 
-notebooks:
-	bash scripts/run_notebooks.sh
-
-backbones:
-	bash scripts/run_backbone_ablation.sh
-
-clean:
-	rm -rf __pycache__ intergate/__pycache__ .pytest_cache

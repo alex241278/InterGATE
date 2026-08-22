@@ -1,0 +1,64 @@
+{
+  "protocol_version": "intergate-v6-biology-first-v1",
+  "endpoint": ["LumA", "LumB", "HER2-enriched", "Basal-like"],
+  "development_cohorts": ["GSE96058", "GSE25066", "GSE162228", "GSE20711"],
+  "external_cohorts": ["TCGA-BRCA", "GSE21653", "GSE1456"],
+  "outer_seeds": [1234, 2025, 7, 99, 31337],
+  "kappa": 0.01,
+  "class_delta_centered": true,
+  "biology_evidence": {
+    "method": "within_cohort_differential_correlation",
+    "minimum_samples_per_group": 8,
+    "minimum_cohorts": 2,
+    "heterogeneity_penalty": 0.5,
+    "known_signatures_used_for_fitting": false
+  },
+  "meta_training": {
+    "episodes": 60,
+    "steps_per_episode": 96,
+    "sampling": "balanced_cohort_by_class_round_robin",
+    "checkpoint_metric": "cohort_macro_f1",
+    "inner_lr": 0.0005,
+    "topology_lambda": 0.1,
+    "biology_context_lambda": 0.1,
+    "xh": "zero"
+  },
+  "support_audit": {
+    "steps": 5,
+    "batches_per_step": 32,
+    "interpretation": "multistep_first_order_influence_not_full_refit"
+  },
+  "biology_graph": {
+    "training_score_terms": {
+      "absolute_centered_class_delta": 1.0,
+      "signed_context_agreement": 0.35,
+      "cohort_support": 0.25
+    },
+    "definitive_locked_score_terms": {
+      "absolute_centered_class_delta": 1.0,
+      "signed_context_agreement": 0.35,
+      "cohort_support": 0.075
+    },
+    "score_lock_timing": "development_only_after_model_fitting_before_external_opening",
+    "module_pool_multiplier": 6,
+    "target_components": 12,
+    "minimum_edges_per_seed_module": 3,
+    "exact_k": true,
+    "causal_claim": false
+  },
+  "phase2": {
+    "phase2a_graph_only_epochs": 5,
+    "phase2b_max_epochs": 80,
+    "structural_parameters_frozen": true,
+    "fixed_graph_bypasses_gates": true,
+    "xh_enters_only_post_pooling": true
+  },
+  "validation": {
+    "candidate_matched_null_draws": 1000,
+    "match_variables": ["edge_type", "prior_sign", "source_out_degree_bin", "target_in_degree_bin"],
+    "directed_rewiring_preserves": ["source_out_degree", "target_in_degree", "edge_type", "prior_sign"],
+    "pam50_excluded_primary": true,
+    "external_opened_once_after_lock": true,
+    "full_label_permutation_retraining": false
+  }
+}

@@ -70,8 +70,17 @@ def compute_metrics_full(y_true: np.ndarray, proba: np.ndarray, label_map: Dict)
     m = {}
     m["acc"] = accuracy_score(y_true, pred)
     m["bal_acc"] = balanced_accuracy_score(y_true, pred)
-    m["macro_f1"] = f1_score(y_true, pred, average="macro", zero_division=0)
-    m["weighted_f1"] = f1_score(y_true, pred, average="weighted", zero_division=0)
+    # Keep the four-class endpoint fixed even inside a cohort in which one
+    # subtype is absent. Otherwise different held-out cohorts would average a
+    # different number of classes and the checkpoint score would not be
+    # comparable across episodes.
+    fixed_labels = np.arange(C)
+    m["macro_f1"] = f1_score(
+        y_true, pred, labels=fixed_labels, average="macro", zero_division=0
+    )
+    m["weighted_f1"] = f1_score(
+        y_true, pred, labels=fixed_labels, average="weighted", zero_division=0
+    )
 
     f1_per = f1_score(y_true, pred, average=None, labels=np.arange(C), zero_division=0)
 

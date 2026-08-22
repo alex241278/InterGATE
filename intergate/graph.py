@@ -19,6 +19,7 @@ This module mirrors the notebook cells 2 / 3.1 / 3.2 / 3.3 exactly, including:
 """
 from __future__ import annotations
 
+import gzip
 import hashlib
 import json
 import re
@@ -657,6 +658,301 @@ def load_huri(
 #  Deduplication  (notebook § 3.3)
 # ═══════════════════════════════════════════════════════════════════════════
 
+# ════════════════════════════════════════════════════════════════════════
+#  STRING  (portado desde el pipeline plano; ver PORT_NOTES.md)
+# ════════════════════════════════════════════════════════════════════════
+
+def _read_string_table(path: Path, *, sep=None) -> pd.DataFrame:
+    """
+    Lee tablas de STRING de forma robusta.
+
+    IMPORTANTE:
+    - protein.links usa separación por espacios.
+    - protein.info usa tabulador, porque la columna annotation puede contener espacios.
+    - protein.aliases usa tabulador.
+
+    El bug corregido aquí era leer protein.info con sep=r"\\s+", lo que rompe
+    las filas cuando la anotación contiene espacios y causa ParserError.
+    """
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"No encuentro el fichero STRING: {path}")
+
+    name = path.name.lower()
+    if sep is None:
+        if "protein.links" in name or "links" in name:
+            sep = r"\s+"
+        elif "protein.info" in name or "info" in name:
+            sep = "\t"
+        elif "protein.alias" in name or "alias" in name:
+            sep = "\t"
+        else:
+            sep = "\t"
+
+    return pd.read_csv(
+        path,
+        sep=sep,
+        compression="infer",
+        low_memory=False,
+    )
+
+
+def _detect_col(df: pd.DataFrame, candidates: List[str], kind: str) -> str:
+    cols = list(df.columns)
+    lower = {str(c).lower().lstrip("#"): c for c in cols}
+    for c in candidates:
+        key = c.lower().lstrip("#")
+        if key in lower:
+            return lower[key]
+    raise ValueError(f"No encuentro columna {kind}. Columnas disponibles: {cols}")
+
+
+def _build_string_protein_to_gene(genes: List[str]) -> Dict[str, str]:
+    """
+    Build STRING protein-id -> gene-symbol mapping.
+
+    Preferred mapping: STRING protein.info file (protein_external_id -> preferred_name).
+    Optional fallback: STRING aliases file (string_protein_id -> alias).
+    Only aliases/names present in the current expression gene universe are retained.
+    """
+    gene_set = {canonical_gene_upper(g) for g in genes}
+    protein_to_gene: Dict[str, str] = {}
+
+    info_file = getattr(C, "STRING_INFO_FILE", None)
+    if info_file is not None:
+        info_file = Path(info_file)
+        if info_file.exists():
+            df_info = _read_string_table(info_file)
+            protein_col = _detect_col(
+                df_info,
+                ["protein_external_id", "#protein_external_id", "string_protein_id", "protein_id"],
+                "STRING protein id",
+            )
+            name_col = _detect_col(
+                df_info,
+                ["preferred_name", "preferredName", "gene", "symbol"],
+                "STRING preferred gene name",
+            )
+            df_info[protein_col] = df_info[protein_col].astype(str)
+            df_info[name_col] = df_info[name_col].map(canonical_gene_upper)
+            df_info = df_info[df_info[name_col].isin(gene_set)]
+            protein_to_gene.update(
+                df_info.drop_duplicates(protein_col).set_index(protein_col)[name_col].to_dict()
+            )
+            print(f"[STRING] info mapping proteins→genes: {len(protein_to_gene)}")
+        else:
+            print(f"[STRING] WARNING: STRING_INFO_FILE no existe: {info_file}")
+
+    alias_file = getattr(C, "STRING_ALIAS_FILE", None)
+    if alias_file is not None:
+        alias_file = Path(alias_file)
+        if alias_file.exists():
+            df_alias = _read_string_table(alias_file)
+            protein_col = _detect_col(
+                df_alias,
+                ["string_protein_id", "#string_protein_id", "protein_external_id", "protein_id"],
+                "STRING protein id",
+            )
+            alias_col = _detect_col(
+                df_alias,
+                ["alias", "gene", "symbol", "preferred_name"],
+                "STRING alias/gene symbol",
+            )
+            df_alias[protein_col] = df_alias[protein_col].astype(str)
+            df_alias[alias_col] = df_alias[alias_col].map(canonical_gene_upper)
+            df_alias = df_alias[df_alias[alias_col].isin(gene_set)].copy()
+
+            cand = (
+                df_alias.groupby(protein_col)[alias_col]
+                .agg(lambda x: sorted(set(x)))
+                .reset_index()
+            )
+            added = 0
+            for pid, aliases in zip(cand[protein_col], cand[alias_col]):
+                if pid in protein_to_gene:
+                    continue
+                if len(aliases) == 1:
+                    protein_to_gene[str(pid)] = aliases[0]
+                    added += 1
+            print(f"[STRING] alias fallback added proteins→genes: {added}")
+        else:
+            print(f"[STRING] WARNING: STRING_ALIAS_FILE no existe: {alias_file}")
+
+    if not protein_to_gene:
+        raise ValueError(
+            "No se pudo construir protein→gene para STRING. Define al menos "
+            "CFG.STRING_INFO_FILE o CFG.STRING_ALIAS_FILE con ficheros STRING válidos."
+        )
+    return protein_to_gene
+
+
+def load_string(
+    genes: List[str],
+    links_file: Optional[Path] = None,
+    cache_dir: Path = None,
+    min_score: Optional[int] = None,
+    weight_scale: Optional[float] = None,
+    max_weight: Optional[float] = None,
+    force_rebuild: bool = False,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Load a STRING graph restricted to the current gene universe.
+
+    STRING is treated as an undirected positive association graph:
+      - each interaction is duplicated in both directions
+      - edge_type = 0, compatible with the physical/functional prior channel
+      - edge_weight = combined_score / STRING_WEIGHT_SCALE, clipped by STRING_MAX_WEIGHT
+
+    The default STRING_MAX_WEIGHT=0.95 intentionally lets OmniPath edges (|w|=1)
+    win exact duplicate (src,tgt) cases during deduplication, preserving signed/directed
+    OmniPath information when CFG.GRAPH_SOURCE="string_omnipath".
+    """
+    cache_dir = Path(cache_dir or getattr(C, "STRING_CACHE_DIR", C.DATA_DIR / "string_cache"))
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    links_file = links_file or getattr(C, "STRING_LINKS_FILE", None)
+    if links_file is None:
+        raise ValueError("Define CFG.STRING_LINKS_FILE con 9606.protein.links*.txt.gz")
+    links_file = Path(links_file)
+    if not links_file.exists():
+        raise FileNotFoundError(f"No encuentro CFG.STRING_LINKS_FILE: {links_file}")
+
+    min_score = int(min_score if min_score is not None else getattr(C, "STRING_MIN_SCORE", 700))
+    weight_scale = float(weight_scale if weight_scale is not None else getattr(C, "STRING_WEIGHT_SCALE", 1000.0))
+    max_weight = float(max_weight if max_weight is not None else getattr(C, "STRING_MAX_WEIGHT", 0.95))
+    force_rebuild = bool(force_rebuild or getattr(C, "FORCE_REBUILD_STRING_CACHE", False))
+
+    gene_sig = hashlib.md5("||".join(map(str, genes)).encode("utf-8")).hexdigest()[:16]
+    cfg_blob = json.dumps({
+        "links": str(links_file),
+        "info": str(getattr(C, "STRING_INFO_FILE", None)),
+        "alias": str(getattr(C, "STRING_ALIAS_FILE", None)),
+        "min_score": min_score,
+        "weight_scale": weight_scale,
+        "max_weight": max_weight,
+    }, sort_keys=True)
+    cfg_sig = hashlib.sha256(cfg_blob.encode("utf-8")).hexdigest()[:12]
+    cache_npz = cache_dir / f"string__n{len(genes)}__sig{gene_sig}__cfg{cfg_sig}.npz"
+
+    if cache_npz.exists() and not force_rebuild:
+        z = np.load(cache_npz)
+        edge_index = z["edge_index"].astype(np.int64)
+        edge_weight = z["edge_weight"].astype(np.float32)
+        edge_type = z["edge_type"].astype(np.int64)
+        print(f"[STRING cache] loaded: {cache_npz.name} | edges={edge_index.shape[1]}")
+        return edge_index, edge_weight, edge_type
+
+    print(f"[STRING] Reading links: {links_file}")
+    df = _read_string_table(links_file, sep=r"\s+")
+    p1_col = _detect_col(df, ["protein1", "#protein1"], "STRING protein1")
+    p2_col = _detect_col(df, ["protein2"], "STRING protein2")
+    score_col = _detect_col(df, ["combined_score", "score"], "STRING combined score")
+
+    df = df[[p1_col, p2_col, score_col]].copy()
+    df[score_col] = pd.to_numeric(df[score_col], errors="coerce")
+    df = df.dropna(subset=[score_col])
+    df = df[df[score_col] >= float(min_score)].copy()
+    print(f"[STRING] links after combined_score >= {min_score}: {len(df)}")
+
+    protein_to_gene = _build_string_protein_to_gene(genes)
+    gene2idx = {canonical_gene_upper(g): i for i, g in enumerate(genes)}
+
+    df["g1"] = df[p1_col].astype(str).map(protein_to_gene)
+    df["g2"] = df[p2_col].astype(str).map(protein_to_gene)
+    df = df.dropna(subset=["g1", "g2"])
+    df = df[df["g1"] != df["g2"]].copy()
+    df = df[df["g1"].isin(gene2idx) & df["g2"].isin(gene2idx)].copy()
+    print(f"[STRING] mapped links within gene universe: {len(df)}")
+
+    if df.empty:
+        return np.zeros((2, 0), np.int64), np.zeros(0, np.float32), np.zeros(0, np.int64)
+
+    src = df["g1"].map(gene2idx).astype(np.int64).values
+    tgt = df["g2"].map(gene2idx).astype(np.int64).values
+    w = (df[score_col].astype(np.float32).values / weight_scale).astype(np.float32)
+    if max_weight is not None:
+        w = np.minimum(w, np.float32(max_weight)).astype(np.float32)
+
+    # STRING is undirected, so expand to directed edges for message passing.
+    src2 = np.concatenate([src, tgt]).astype(np.int64)
+    tgt2 = np.concatenate([tgt, src]).astype(np.int64)
+    w2 = np.concatenate([w, w]).astype(np.float32)
+
+    edge_index = np.vstack([src2, tgt2]).astype(np.int64)
+    edge_weight = w2
+    # Tipo de arista de STRING. En el pipeline plano original era 0, el mismo
+    # que HuRI, porque nunca se combinaban (los presets eran huri_omnipath O
+    # string_omnipath). Con GRAPH_SOURCE="all" si coexisten, y compartir tipo
+    # las haria indistinguibles para el gating por tipo de arista. Por eso
+    # STRING usa su propio tipo (CFG.STRING_EDGE_TYPE, por defecto 3).
+    _string_et = int(getattr(C, "STRING_EDGE_TYPE", 3))
+    edge_type = np.full(edge_weight.shape[0], _string_et, dtype=np.int64)
+
+    np.savez_compressed(
+        cache_npz,
+        edge_index=edge_index.astype(np.int64),
+        edge_weight=edge_weight.astype(np.float32),
+        edge_type=edge_type.astype(np.int64),
+    )
+    print(f"[STRING cache] saved: {cache_npz.name}")
+    print(
+        f"[STRING] edge_index={edge_index.shape} | "
+        f"w min/median/max={edge_weight.min():.3f}/"
+        f"{np.median(edge_weight):.3f}/{edge_weight.max():.3f}"
+    )
+    return edge_index, edge_weight, edge_type
+
+
+def resolve_backbone_sources(
+    graph_source: Optional[str] = None,
+    use_omnipath: Optional[bool] = None,
+    use_huri: Optional[bool] = None,
+    use_string: Optional[bool] = None,
+) -> Tuple[bool, bool, bool, str]:
+    """
+    Resolve which prior sources to use.
+
+    Returns
+    -------
+    use_omnipath, use_huri, use_string, graph_source
+    """
+    src = str(graph_source or getattr(C, "GRAPH_SOURCE", "custom")).lower().strip()
+    src = src.replace("+", "_").replace("-", "_").replace(" ", "_")
+
+    presets = {
+        "huri_omnipath":   (True,  True,  False),
+        "huri_op":         (True,  True,  False),
+        "original":        (True,  True,  False),
+        "string_omnipath": (True,  False, True),
+        "string_op":       (True,  False, True),
+        "string":          (False, False, True),
+        "omnipath":        (True,  False, False),
+        "op":              (True,  False, False),
+        "huri":            (False, True,  False),
+        "all":             (True,  True,  True),
+        "custom":          (None,  None,  None),
+    }
+    if src not in presets:
+        raise ValueError(
+            f"CFG.GRAPH_SOURCE={graph_source!r} no soportado. Usa uno de: "
+            f"{sorted(presets)}"
+        )
+
+    p_op, p_huri, p_string = presets[src]
+    if p_op is None:
+        p_op = bool(getattr(C, "USE_OMNIPATH", True))
+        p_huri = bool(getattr(C, "USE_HURI", True))
+        p_string = bool(getattr(C, "USE_STRING", False))
+
+    if use_omnipath is not None:
+        p_op = bool(use_omnipath)
+    if use_huri is not None:
+        p_huri = bool(use_huri)
+    if use_string is not None:
+        p_string = bool(use_string)
+
+    return bool(p_op), bool(p_huri), bool(p_string), src
+
+
 def dedup_edges(
     edge_index: np.ndarray,
     edge_weight: np.ndarray,
@@ -720,14 +1016,19 @@ def dedup_edges(
 
 def build_backbone(
     genes: List[str],
-    use_omnipath: bool = C.USE_OMNIPATH,
-    use_huri: bool = C.USE_HURI,
+    use_omnipath: Optional[bool] = None,
+    use_huri: Optional[bool] = None,
+    use_string: Optional[bool] = None,
+    graph_source: Optional[str] = None,
     backbone_cache_dir: Optional[Path] = None,
     force_rebuild: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    Build the full backbone graph (HuRI + OmniPath), with:
-      - per-source loading  (OmniPath, HuRI)
+    Build the full backbone graph, with:
+      - per-source loading  (OmniPath, HuRI, STRING)
+      - source selection via ``graph_source`` / ``CFG.GRAPH_SOURCE``:
+        "huri_omnipath" (defecto) | "string_omnipath" | "all" |
+        "huri" | "omnipath" | "string" | "custom"
       - deduplication on (src, tgt)
       - global backbone cache with validation
       - REQUIRED_CONNECTED_GENES gate
@@ -742,6 +1043,15 @@ def build_backbone(
     backbone_cache_dir.mkdir(parents=True, exist_ok=True)
     force_rebuild = force_rebuild or getattr(C, "FORCE_REBUILD_BACKBONE_CACHE", False)
 
+    use_omnipath, use_huri, use_string, graph_source = resolve_backbone_sources(
+        graph_source=graph_source,
+        use_omnipath=use_omnipath,
+        use_huri=use_huri,
+        use_string=use_string,
+    )
+    print(f"[graph] GRAPH_SOURCE={graph_source} | "
+          f"OmniPath={use_omnipath} HuRI={use_huri} STRING={use_string}")
+
     required_connected = getattr(C, "REQUIRED_CONNECTED_GENES", set())
     expected_connected = load_expected_connected_genes()
 
@@ -751,10 +1061,12 @@ def build_backbone(
     ).hexdigest()[:16]
     score_flag = 1 if C.USE_HURI_CONFIDENCE else 0
     min_score_tag = str(C.HURI_MIN_SCORE).replace(".", "p")
+    string_min_tag = str(getattr(C, "STRING_MIN_SCORE", "NA")).replace(".", "p")
     cache_npz = backbone_cache_dir / (
         f"backbone_global__n{len(genes)}__sig{gene_sig}"
         f"__op{int(bool(use_omnipath))}__huri{int(bool(use_huri))}"
-        f"__score{score_flag}__min{min_score_tag}.npz"
+        f"__string{int(bool(use_string))}"
+        f"__score{score_flag}__min{min_score_tag}__smin{string_min_tag}.npz"
     )
 
     if cache_npz.exists() and not force_rebuild:
@@ -791,6 +1103,13 @@ def build_backbone(
         ew_parts.append(ew)
         et_parts.append(et)
         print(f"[Merge input] HuRI edges={ei.shape[1]}")
+
+    if use_string:
+        ei, ew, et = load_string(genes)
+        ei_parts.append(ei)
+        ew_parts.append(ew)
+        et_parts.append(et)
+        print(f"[Merge input] STRING edges={ei.shape[1]}")
 
     if not ei_parts:
         return np.zeros((2, 0), np.int64), np.zeros(0, np.float32), np.zeros(0, np.int64)

@@ -1,0 +1,26 @@
+name: repository-audit
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  static-and-synthetic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install lightweight test dependencies
+        run: python -m pip install numpy pandas
+      - name: Compile source
+        run: python -m compileall -q intergate data_prepare scripts tests
+      - name: Check notebook contract
+        run: python tests/check_notebook_contract.py
+      - name: Check protocol alignment
+        run: python tests/test_protocol_alignment.py
+      - name: Run synthetic invariance checks
+        run: python tests/test_v6_synthetic.py
+

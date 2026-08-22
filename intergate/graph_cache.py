@@ -57,8 +57,16 @@ def _genes_fingerprint(genes: List[str]) -> str:
 def _backbone_config_fingerprint() -> str:
     """Hash de los flags de config que afectan al backbone."""
     blob = json.dumps({
+        "GRAPH_SOURCE": getattr(C, "GRAPH_SOURCE", "custom"),
         "USE_HURI": C.USE_HURI,
         "USE_OMNIPATH": C.USE_OMNIPATH,
+        "USE_STRING": getattr(C, "USE_STRING", False),
+        "STRING_LINKS_FILE": str(getattr(C, "STRING_LINKS_FILE", "")),
+        "STRING_INFO_FILE": str(getattr(C, "STRING_INFO_FILE", "")),
+        "STRING_ALIAS_FILE": str(getattr(C, "STRING_ALIAS_FILE", "")),
+        "STRING_MIN_SCORE": getattr(C, "STRING_MIN_SCORE", None),
+        "STRING_WEIGHT_SCALE": getattr(C, "STRING_WEIGHT_SCALE", None),
+        "STRING_MAX_WEIGHT": getattr(C, "STRING_MAX_WEIGHT", None),
         "USE_HURI_CONFIDENCE": C.USE_HURI_CONFIDENCE,
         "HURI_MIN_SCORE": C.HURI_MIN_SCORE,
         "HURI_DEFAULT_WEIGHT": C.HURI_DEFAULT_WEIGHT,
@@ -91,8 +99,10 @@ def get_or_build_backbone(
     *,
     cache_dir: Optional[Path] = None,
     force_rebuild: bool = False,
-    use_omnipath: bool = C.USE_OMNIPATH,
-    use_huri: bool = C.USE_HURI,
+    graph_source: Optional[str] = None,
+    use_omnipath: Optional[bool] = None,
+    use_huri: Optional[bool] = None,
+    use_string: Optional[bool] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Devuelve (edge_index, edge_weight, edge_type) del backbone completo.
@@ -152,7 +162,8 @@ def get_or_build_backbone(
     # ── Generar y guardar ──────────────────────────────────────────────────
     print(f"[graph_cache] Generando backbone (build_backbone)…")
     edge_index, edge_weight, edge_type = build_backbone(
-        genes, use_omnipath=use_omnipath, use_huri=use_huri,
+        genes, graph_source=graph_source, use_omnipath=use_omnipath,
+        use_huri=use_huri, use_string=use_string,
     )
     np.savez_compressed(
         cache_path,

@@ -1,33 +1,9 @@
 name: intergate
 channels:
-  - pytorch
-  - nvidia
-  - pyg
   - conda-forge
 dependencies:
-  - python=3.10
-  - pip
-  - numpy
-  - pandas
-  - scipy
-  - scikit-learn
-  - statsmodels
-  - matplotlib
-  - networkx
-  - tqdm
-  - requests
-  - pillow
-  - jupyterlab
-  - ipykernel
-  - nbconvert
-  - pytorch
-  - pytorch-cuda=12.4
-  - pyg
+  - python=3.11
+  - pip>=24
   - pip:
-      - mygene
-      - gprofiler-official
-      - gseapy
-      - umap-learn
-      - xgboost
-      - catboost
-      - lightgbm
+      - -e .[full]
+

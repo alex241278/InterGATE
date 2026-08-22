@@ -1,17 +1,35 @@
 cff-version: 1.2.0
-message: "If you use this code or the accompanying data, please cite the software/repository and the Zenodo dataset."
-title: "InterGATE self-contained reproducibility package"
-authors:
-  - family-names: "Alvaro-Meca"
-    given-names: "Alejandro"
-  - family-names: "Senovilla"
-    given-names: "Laura"
-  - family-names: "Alvarez-Frutos"
-    given-names: "Lucia"
-version: "1.0.0"
-date-released: "2026-06-22"
-identifiers:
-  - type: doi
-    value: "10.5281/zenodo.20817487"
+message: "If you use InterGATE, please cite the associated manuscript."
+title: "InterGATE: reproducible biology-first sparse interactome learning"
+type: software
+version: 6.0.0
 repository-code: "https://github.com/alex241278/InterGATE"
-license: "MIT"
+license: MIT
+authors:
+  - family-names: Alvarez-Frutos
+    given-names: Lucia
+    orcid: "https://orcid.org/0000-0001-5663-3518"
+    affiliation: "IBGM, CSIC--Universidad de Valladolid"
+  - family-names: Senovilla
+    given-names: Laura
+    orcid: "https://orcid.org/0000-0001-6887-2436"
+    affiliation: "IBGM, CSIC--Universidad de Valladolid"
+  - family-names: Alvaro-Meca
+    given-names: Alejandro
+    orcid: "https://orcid.org/0000-0003-1315-4386"
+    affiliation: "Universidad Rey Juan Carlos; CIBERINFEC"
+preferred-citation:
+  type: article
+  title: "InterGATE recovers a reproducible Basal-like interaction core across breast cancer transcriptomic cohorts"
+  authors:
+    - family-names: Alvarez-Frutos
+      given-names: Lucia
+      orcid: "https://orcid.org/0000-0001-5663-3518"
+    - family-names: Senovilla
+      given-names: Laura
+      orcid: "https://orcid.org/0000-0001-6887-2436"
+    - family-names: Alvaro-Meca
+      given-names: Alejandro
+      orcid: "https://orcid.org/0000-0003-1315-4386"
+  year: 2026
+  notes: "Laura Senovilla and Alejandro Alvaro-Meca share senior authorship."

@@ -1,173 +1,203 @@
+# InterGATE
+
 <p align="center">
-  <img src="assets/Abstract.png" alt="InterGATE graphical abstract" width="100%">
+  <strong>Reproducible, biology-first sparse interactome learning for breast-cancer transcriptomics</strong>
 </p>
 
-# InterGATE — supervised sparse interactome learning
+<p align="center">
+  <img alt="Python 3.11" src="https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white">
+  <img alt="License MIT" src="https://img.shields.io/badge/License-MIT-2EA44F">
+  <img alt="Workflow audited" src="https://img.shields.io/badge/workflow-audited-6F42C1">
+</p>
 
-[![Code License: MIT](https://img.shields.io/badge/Code%20License-MIT-blue.svg)](LICENSE)
-[![Materials License: CC BY 4.0](https://img.shields.io/badge/Materials%20License-CC%20BY%204.0-lightgrey.svg)](LICENSE-CC-BY-4.0.md)
+<p align="center">
+  <img src="assets/graphical_abstract.png" alt="InterGATE graphical abstract" width="100%">
+</p>
 
-InterGATE is a modular graph neural network pipeline for supervised learning of sparse, stable and interpretable task-specific subnetworks from transcriptomic data and prior biological interaction graphs. The repository includes the breast cancer subtype classification case study described in the manuscript.
+InterGATE learns sparse, class-specific networks from a HuRI--OmniPath prior
+while keeping prediction and biological network recovery as separate
+estimands. The locked analysis uses 3,713 tumours from four development
+cohorts, 1,143 tumours from three external cohorts, 7,131 connected genes,
+52,878 eligible directed interactions, five prespecified seeds, and an equal
+Exact-K = 529 budget for every class. The Basal-like strict 5/5 core contains
+284 directed edges and 257 genes.
 
-The data source configured for this package is:
+The repository reproduces the complete workflow reported in the manuscript:
+public-data acquisition, audited endpoint construction, reference M-ComBat,
+model fitting, stability and null analyses, protocol locking, external
+evaluation, figures, and the paired tabular benchmark. InterGATE recovers
+stable, class-contrastive interaction hypotheses within a declared prior.
 
-```text
-DOI: 10.5281/zenodo.20817487
-Zenodo record id: 20817487
-```
+> **Review status.** This repository is intentionally private during peer
+> review. It is designed to be made public and archived as a versioned release
+> upon acceptance.
 
-## Quick start
+## Start here
 
-Create the environment:
+The supported environment is Python 3.11. From a clean clone:
 
 ```bash
-conda env create -f environment.yml
+git clone https://github.com/alex241278/InterGATE.git
+cd InterGATE
+mamba env create -f environment.yml
 conda activate intergate
-pip install -e ".[all]"
 ```
 
-For non-conda installations:
+Then run data preparation first, followed by the numbered analyses:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip
-pip install -e ".[all]"
+python scripts/preflight.py --stage data
+python scripts/run_pipeline.py data
+
+python scripts/preflight.py --stage analysis
+python scripts/run_pipeline.py analysis
 ```
 
-Use Python 3.10 or 3.11. The package metadata intentionally excludes Python 3.13 because several scientific and graph-learning dependencies may not yet provide stable wheels for that version.
-
-For GPU runs, install the PyTorch and PyTorch Geometric builds that match your CUDA version before running the notebooks.
-
-Run the offline self-contained checks first. These commands do not require the Zenodo manuscript data or network access after installation:
+The same sequence can be launched with one command:
 
 ```bash
-python scripts/01_smoke_test.py
-python scripts/02_run_toy_example.py
+python scripts/run_pipeline.py all
 ```
 
-Download and arrange the manuscript data:
+The runner executes notebooks without modifying their source files and stores
+executed copies under `results/executed_notebooks/`. Use `--dry-run` to inspect
+the exact order, and `--from-step` / `--through-step` to resume a bounded part:
 
 ```bash
-python scripts/download_zenodo_data.py --extract
-python scripts/00_check_setup.py
+python scripts/run_pipeline.py analysis --dry-run
+python scripts/run_pipeline.py analysis --from-step 04 --through-step 06
 ```
 
-Then run the main notebooks in order:
+A CUDA-capable GPU is strongly recommended for the five-seed InterGATE fit.
+If a specific CUDA build is required, install PyTorch using the official
+[PyTorch selector](https://pytorch.org/get-started/locally/) before running
+`pip install -e ".[full]"`.
+
+## Workflow
+
+```mermaid
+flowchart TD
+    A["Public GEO and TCGA/Xena cohorts"] --> B["00a–04: audited data preparation"]
+    B --> C["01–06: development-only learning and protocol lock"]
+    C --> D["07–08: locked external evaluation"]
+    D --> E["09–11: controls, figures, and paired benchmark"]
+```
+
+### Data preparation: run first
+
+| Step | Notebook | Purpose |
+|---:|---|---|
+| 00a | `00a_download_microarrays.ipynb` | Download and audit five molecularly annotated microarray cohorts |
+| 00b | `00b_download_rnaseq.ipynb` | Download and audit GSE96058 and TCGA-BRCA RNA-seq data |
+| 01 | `01_union_datasets.ipynb` | Build the seven-cohort gene intersection and audit sample duplication |
+| 02 | `02_preparacion_y_suelo.ipynb` | Enforce the intrinsic-four endpoint, correct the documented floor, and freeze the 4/3 cohort split |
+| 03 | `03_split_y_mcombat_ref.ipynb` | Fit reference M-ComBat in development and project external cohorts separately |
+| 04 | `04_qc_batch_y_fuga.ipynb` | Quantify residual technical structure and verify invariance |
+
+Successful preparation creates the four immutable inputs consumed by the model:
 
 ```text
-0_Main_Pipeline.ipynb
-1_Results_Bootstrap.ipynb
-2_Ejes_REFINED_AXES.ipynb
-3_Ejes_Figura_residuales.ipynb
-4_Lista_genes_por_eje.ipynb
-5_Bioinformatics_Benchmarks.ipynb
-6_Benchmarks_SOTA.ipynb
+data_prepare/output_mcombat/
+├── expr_train_mcombat.csv   # 11,145 genes × 3,713 development samples
+├── expr_test_mcombat.csv    # 11,145 genes × 1,143 external samples
+├── meta_train.csv
+└── meta_test.csv
 ```
 
-Or execute the main workflow from the shell:
+### Analysis: run in numerical order
+
+| Step | Notebook | Main output |
+|---:|---|---|
+| 01 | `01_validar_runtime_y_evidencia.ipynb` | Connected prior and train-only differential-correlation evidence |
+| 02 | `02_entrenar_INTERGATE_V6.ipynb` | Five complete seed bundles |
+| 03 | `03_estabilidad_y_auditoria_V6.ipynb` | Multiseed reproducibility and consensus networks |
+| 04 | `04_baselines_y_ablacion_minima.ipynb` | Development baselines, mechanistic controls, and definitive 0.075 score lock |
+| 05 | `05_validacion_biologica_y_depmap.ipynb` | Candidate-matched nulls, topology-preserving rewiring, enrichment, and DepMap |
+| 06 | `06_congelar_protocolo_externo.ipynb` | File hashes and external protocol lock |
+| 07 | `07_test_externo_bloqueado.ipynb` | Single-use locked external predictive evaluation |
+| 08 | `08_concordancia_estructural_externa.ipynb` | Post-lock external edge-effect concordance |
+| 09 | `09_ablaciones_biologia_score_0075.ipynb` | Development-only biological-score ablations |
+| 10 | `10_figuras_definitivas.ipynb` | Five manuscript figures in PDF, SVG, and PNG |
+| 11 | `11_benchmark_tabular_pareado_S12.ipynb` | Paired tabular comparison and Supplementary Table 12 outputs |
+
+Notebook 07 writes a completion marker and is not reopened by the runner after
+a successful locked evaluation. Steps 08 and 11 use the already locked
+protocol and never select a graph or hyperparameter from external performance.
+
+## Two score coefficients, one unambiguous timeline
+
+The training-stage biology score uses cohort-support weight **0.25**. After
+model fitting, a development-only structural sensitivity analysis locks
+**0.075** for the definitive biological networks, before the external block is
+opened. The distinction is encoded in `configs/protocol_v6.json`, enforced in
+`intergate/config.py`, and checked by the repository tests. No model is
+retrained when the definitive 0.075 networks are reconstructed.
+
+## Scientific scope
+
+Prediction and biological network recovery are evaluated as distinct
+objectives. The biological graphs are prior-bounded association hypotheses:
+edge direction and regulatory sign remain annotations inherited from
+HuRI--OmniPath, and differential correlation is not interpreted as a causal
+effect. The paired external benchmark is predictive context, not a claim of
+universal superiority.
+
+## Licensed biological resources
+
+MSigDB Hallmark and C2:CGP GMT files are downloaded by notebook 05. DepMap
+files are not redistributed. To reproduce the DepMap analysis, place the
+required release files as described in
+[`resources_biological/README.md`](resources_biological/README.md). To run all
+other biological analyses without DepMap, set:
 
 ```bash
-bash scripts/run_notebooks.sh
+export INTERGATE_RUN_DEPMAP=0
 ```
 
-The optional backbone-replacement ablation is provided separately because it can be computationally expensive:
+Skipping DepMap permits execution through analysis step 05 only; the full
+paper protocol lock in step 06 intentionally requires the reported DepMap
+outputs. For NCBI requests, the download notebook uses the corresponding author's
+public contact by default. It can be overridden locally with
+`INTERGATE_NCBI_EMAIL`.
 
-```bash
-bash scripts/run_backbone_ablation.sh
-# or: make backbones
-```
-
-This executes `notebooks/7_Backbone_Ablation.ipynb` and writes results under `artifacts_backbone_ablation/`. The paper-aligned backbone diagnostic supplied with this release is documented in `docs/BACKBONE_ABLATION.md`.
-
-## Required downloaded layout
-
-After running the Zenodo download command, the paper-aligned project layout should contain:
+## Repository map
 
 ```text
-data/processed/expr_combat_corrected.csv
-data/processed/metadata_combined.csv
-cache/pipeline_cache/backbone__362de41006ca05c1__e71ae7463734.npz
-cache/pipeline_cache/backbone_global__n11907__sig5f9c12d26c9c90d5__op1__huri1__score1__min0p0.npz
-cache/pipeline_cache/HuRI.filtered.with_score.min0.0.impute_median.npz
-cache/pipeline_cache/Xh__0575558be8d8a450__c102b7893b38__2060915c8ab9.npz
-artifacts_ablation/
-artifacts_backbone_ablation/
+InterGATE/
+├── data_prepare/           # public-data acquisition and reference M-ComBat
+├── intergate/              # current V6 analysis package
+├── notebooks/              # 11 source notebooks, clean and output-free
+├── configs/                # machine-readable locked protocol
+├── resources_biological/   # redistributable identifiers and resource guide
+├── scripts/                # preflight and ordered notebook runner
+├── tests/                  # protocol, inventory, and synthetic guards
+└── assets/                 # graphical abstract
 ```
 
-The download script attempts to find these files automatically inside the Zenodo record or its extracted archives. It copies the processed CSVs to `data/processed/`, the paper-aligned cache files to `cache/pipeline_cache/`, the ablation/model artifacts to the root-level `artifacts_ablation/` directory, and the backbone-replacement ablation artifacts to the root-level `artifacts_backbone_ablation/` directory. The source archive/directory may also be named `artifact_back_bone_ablation`; the script normalizes it to `artifacts_backbone_ablation/`. If the processed CSV names in Zenodo are slightly different, the script searches common alternatives and normalizes the layout. If automatic detection fails, manually copy or rename the files to the paths above.
+Generated data, model weights, caches, and results are deliberately excluded
+from Git. Public source cohorts remain governed by their original repositories
+and licences.
 
-## Optional external graph resources
+## Reproducibility checks
 
-The graph builder can use local copies of:
-
-```text
-data/external/omnipath_interactions.tsv
-data/external/HuRI.tsv
-data/external/HuRI.psi
-```
-
-If these files are absent, `intergate.graph` can still try to download OmniPath and HuRI resources during graph construction. Keeping local copies is preferable for offline and reproducible reruns.
-
-## Useful commands
+Run the complete static and synthetic audit with:
 
 ```bash
-make install     # pip install -e .[all]
-make data        # download/extract Zenodo data
-make check       # verify required local layout
-make smoke       # import package modules and check notebook metadata
-make toy         # run the bundled offline toy data/edge-list check
-make notebooks   # execute main notebooks in order
-make backbones   # execute optional backbone-ablation notebook
-make clean       # remove Python caches
+make test
 ```
 
-## Backbone ablation and graph controls
+The checks verify notebook order and cleanliness, portable paths, cohort and
+seed contracts, Exact-\(K\), the 0.25-to-0.075 score timeline, and train-only
+evidence invariance after an external block is appended.
 
-The repository contains two distinct graph-comparison layers.
+## Citation and authorship
 
-1. `intergate.backbone_ablation` is an internal architecture ablation. It keeps the InterGATE sparse graph-learning protocol active and only swaps the message-passing block used inside `ImprovedSharedGraphGNN`. The implemented drop-in blocks are weighted GraphSAGE, weighted GIN and a local graph-transformer-style block. Use this analysis to test whether the ResGAT backbone is the best choice inside the proposed framework.
+Citation metadata are available in [`CITATION.cff`](CITATION.cff). Laura
+Senovilla and Alejandro Alvaro-Meca jointly supervised the work and share
+senior authorship.
 
-2. `intergate.benchmarks` and `intergate.benchmarks_gnn_baselines` are fixed-prior graph controls. In these controls, graph learning is disabled and the biological prior is held fixed. These rows answer a different question: whether ordinary message passing on a fixed prior is sufficient. These controls are generated by the benchmark notebooks and must not be mixed with the backbone-replacement diagnostic stored under `docs/`.
+## Licence
 
-Do not merge both result families into a single row set without labelling them clearly. Backbone-replacement rows are ablation results; fixed-prior rows are external graph-control baselines.
-
-## Environment variables
-
-All important paths can be overridden without editing code:
-
-```bash
-export INTERGATE_DATA_DIR=/path/to/processed_data
-export INTERGATE_EXPR_CSV=/path/to/expr_combat_corrected.csv
-export INTERGATE_META_CSV=/path/to/metadata_combined.csv
-export INTERGATE_RAW_DATA_DIR=/path/to/raw_zenodo_files
-export INTERGATE_EXTERNAL_DATA_DIR=/path/to/external_graph_files
-export INTERGATE_CACHE_ROOT=/path/to/cache
-export INTERGATE_ARTIFACTS_ROOT=/path/to/artifacts_ablation
-# Backbone ablation artifacts are expected at ./artifacts_backbone_ablation/
-```
-
-## Validation checklist
-
-Before launching the full workflow, run:
-
-```bash
-python scripts/01_smoke_test.py
-python scripts/00_check_setup.py
-```
-
-The smoke test checks that core package modules import correctly and that notebooks do not contain stored outputs, execution counts, or obvious absolute local paths. The setup check verifies that the required processed CSV files are available.
-
-## Reproducibility notes
-
-The package follows standard computational reproducibility practices: relative paths, explicit environment files, stable data DOI, checksum manifest, notebook execution order and local cache/artifact directories. The file `docs/REPRODUCIBILITY_CHECKLIST.md` separates offline self-contained checks from full manuscript reproduction after Zenodo download. The file `REFERENCES.bib` includes methodological and software references relevant to FAIR/reproducible workflows, HuRI, OmniPath, PyTorch and PyTorch Geometric.
-
-## Citation
-
-Use the Zenodo DOI for the data:
-
-```text
-10.5281/zenodo.20817487
-```
-
-A software citation file is provided in `CITATION.cff` and points to the public repository URL.
+Code, original documentation, and original graphics in this repository are
+released under the [MIT License](LICENSE), unless a file states otherwise.
+Third-party datasets and annotations retain their original terms.

@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Environments and editors
+.venv/
+venv/
+env/
+.env
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Raw and prepared cohorts
+data/
+data_prepare/Data/
+data_prepare/cache_geo/
+data_prepare/tcga_brca_auto/
+data_prepare/output_union/
+data_prepare/output_prepared/
+data_prepare/output_mcombat/
+
+# External licensed resources
+resources_biological/depmap/*
+!resources_biological/depmap/.gitkeep
+resources_biological/msigdb/*
+!resources_biological/msigdb/.gitkeep
+
+# Derived artifacts
+artifacts/
+cache/
+results/
+results_v6/
+figures/
+*.pt
+*.pth
+*.ckpt
+*.joblib
+
+# Packaging
+build/
+dist/
+*.egg-info/
+

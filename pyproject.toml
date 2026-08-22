@@ -1,54 +1,63 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "intergate"
-version = "1.0.0"
-description = "Self-contained InterGATE pipeline for supervised sparse interactome learning in transcriptomic classification."
+name = "intergate-reproducibility"
+version = "6.0.0"
+description = "Biology-first supervised sparse interactome learning for transcriptomic subtypes"
 readme = "README.md"
-requires-python = ">=3.10,<3.13"
+requires-python = ">=3.11,<3.12"
+license = {text = "MIT"}
 authors = [
-  {name = "Alejandro Alvaro-Meca"}
+  {name = "Lucia Alvarez-Frutos"},
+  {name = "Laura Senovilla"},
+  {name = "Alejandro Alvaro-Meca", email = "alejandro.alvaro@urjc.es"},
+]
+keywords = [
+  "graph neural networks",
+  "transcriptomics",
+  "breast cancer",
+  "network biology",
+  "reproducibility",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.11",
+  "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
 dependencies = [
-  "numpy>=1.24",
-  "pandas>=2.0",
-  "scipy>=1.10",
-  "scikit-learn>=1.3",
-  "statsmodels>=0.14",
-  "matplotlib>=3.7",
-  "networkx>=3.0",
-  "tqdm>=4.66",
-  "requests>=2.31",
-  "pillow>=10.0",
-  "torch>=2.1",
-  "torch-geometric>=2.4",
-  "umap-learn>=0.5",
-  "mygene>=3.2",
-  "gprofiler-official>=1.0",
-  "gseapy>=1.1"
+  "joblib>=1.3,<2",
+  "networkx>=3.2,<4",
+  "numpy>=1.26,<3",
+  "pandas>=2.1,<4",
+  "requests>=2.31,<3",
+  "scikit-learn>=1.4,<2",
+  "scipy>=1.11,<2",
+  "torch>=2.3,<3",
+  "xgboost>=2,<4",
 ]
 
 [project.optional-dependencies]
-benchmarks = [
-  "xgboost>=2.0",
-  "catboost>=1.2",
-  "lightgbm>=4.0"
+full = [
+  "GEOparse>=2.0,<3",
+  "inmoose>=0.9,<1",
+  "ipykernel>=6,<7",
+  "jupyterlab>=4,<5",
+  "matplotlib>=3.8,<4",
+  "mygene>=3.2,<4",
+  "nbclient>=0.10,<1",
+  "nbconvert>=7,<8",
+  "nbformat>=5.10,<6",
+  "seaborn>=0.13,<1",
 ]
-notebooks = [
-  "jupyterlab>=4.0",
-  "ipykernel>=6.0",
-  "nbconvert>=7.0"
+test = [
+  "pytest>=8,<9",
 ]
-all = [
-  "xgboost>=2.0",
-  "catboost>=1.2",
-  "lightgbm>=4.0",
-  "jupyterlab>=4.0",
-  "ipykernel>=6.0",
-  "nbconvert>=7.0"
-]
+
+[project.urls]
+Repository = "https://github.com/alex241278/InterGATE"
 
 [tool.setuptools.packages.find]
 include = ["intergate*"]
