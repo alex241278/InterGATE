@@ -1,4 +1,4 @@
-"""Biology-first cohort-transport learning for InterGATE V6.
+"""Biology-first cohort-transport learning for InterGATE V8.
 
 Every meta-episode holds out one development cohort and uses the same fixed
 number of class/cohort-balanced updates. Structural parameters are adapted on
@@ -10,7 +10,7 @@ signatures, DepMap or external labels.
 The selected checkpoint is audited with multiple leave-one-development-
 cohort influence steps. The audit exports parameter deltas, logit changes,
 rank correlations and TopK turnover, so an unchanged support result cannot be
-misreported as evidence of transport. V6 exports two separate Exact-K objects:
+misreported as evidence of transport. V8 exports two separate Exact-K objects:
 the total-score graph used by the classifier and a centered-differential,
 module-aware association graph used for biological interpretation. Neither is
 claimed to be a de-novo or causal network.
@@ -23,6 +23,7 @@ from itertools import combinations
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 import json
+import hashlib
 import math
 import os
 import random
@@ -38,7 +39,7 @@ try:  # PyTorch >= 2.0
 except ImportError:  # pragma: no cover - compatibility with older PyTorch
     from torch.nn.utils.stateless import functional_call as _functional_call
 
-from .config import CFG
+from .config import CFG, implementation_fingerprint, model_config_fingerprint
 from .data import ExpressionDataset
 from .losses import compute_metrics_full
 from .training import (
@@ -60,17 +61,18 @@ from .ablation import (
     build_model_from_cfg,
     build_union_class_graph,
     class_names_from_label_map,
+    cfg_to_dict,
     resolve_class_keep_ratio,
     save_bundle,
 )
 
 
-TRANSPORT_ARTIFACT_NAME = "INTERGATE_V6"
+TRANSPORT_ARTIFACT_NAME = "INTERGATE_V8"
 
 
 @dataclass(frozen=True)
 class TransportConfig:
-    """Immutable settings recorded in every InterGATE V6 artifact."""
+    """Immutable settings recorded in every InterGATE V8 artifact."""
 
     protocol_version: str
     episodes: int
@@ -133,7 +135,7 @@ class StructuralBudget:
 
     The legacy InterGATE pruning path recognizes the special layout in which
     the second half of the candidate list is exactly the reverse of the first
-    half. InterGATE V6 preserves that layout atomically when it is genuinely
+    half. InterGATE V8 preserves that layout atomically when it is genuinely
     present. A directed or differently ordered interactome instead uses one
     directed edge per structural unit; near-matches are never paired.
     """
@@ -509,11 +511,11 @@ def assert_transport_runtime(
     """Fail closed if external data or an undeclared cohort is visible."""
     if np.asarray(test_idx).size:
         raise RuntimeError(
-            "InterGATE V6 exige un runtime development-only: test_idx debe "
+            "InterGATE V8 exige un runtime development-only: test_idx debe "
             "estar vacío."
         )
     if str(cfg.GRAPH_LEARNING_XH_MODE).lower() != "zero":
-        raise RuntimeError("InterGATE V6 exige X_h=0 durante toda Phase 1.")
+        raise RuntimeError("InterGATE V8 exige X_h=0 durante toda Phase 1.")
     cohort = np.asarray(cohort).astype(str)
     dev_idx = np.unique(np.concatenate([
         np.asarray(train_idx, dtype=np.int64),
@@ -524,7 +526,7 @@ def assert_transport_runtime(
     external = {str(value).upper().strip() for value in cfg.TEST_COHORTS}
     if observed & external:
         raise RuntimeError(
-            f"Cohortes externas visibles en InterGATE V6: {sorted(observed & external)}"
+            f"Cohortes externas visibles en InterGATE V8: {sorted(observed & external)}"
         )
     if observed != declared:
         raise RuntimeError(
@@ -533,6 +535,40 @@ def assert_transport_runtime(
         )
     # Preserve the declared order for round-robin episodes.
     return [str(value) for value in cfg.TRAIN_COHORTS]
+
+
+def _training_contract_fingerprint(
+    X_gene: np.ndarray,
+    X_h: np.ndarray,
+    y: np.ndarray,
+    cohort: Sequence[str],
+    train_idx: np.ndarray,
+    val_idx: np.ndarray,
+    test_idx: np.ndarray,
+) -> str:
+    """Identity of the model configuration and development split."""
+    dataset_content_sha256 = str(_RT.get("dataset_content_sha256", ""))
+    if len(dataset_content_sha256) != 64:
+        raise RuntimeError(
+            "No existe la firma SHA-256 del runtime. Ejecute prepare_runtime "
+            "antes de entrenar o reanudar."
+        )
+    digest = hashlib.sha256()
+    digest.update(model_config_fingerprint(CFG).encode("ascii"))
+    digest.update(implementation_fingerprint().encode("ascii"))
+    digest.update(dataset_content_sha256.encode("ascii"))
+    digest.update(json.dumps(
+        asdict(CFG_FULL), sort_keys=True, separators=(",", ":")
+    ).encode("utf-8"))
+    for shape in (np.shape(X_gene), np.shape(X_h)):
+        digest.update(json.dumps(list(shape)).encode("ascii"))
+    for values in (y, train_idx, val_idx, test_idx):
+        array = np.ascontiguousarray(np.asarray(values, dtype=np.int64))
+        digest.update(array.tobytes())
+    digest.update(
+        "\x1f".join(np.asarray(cohort).astype(str)).encode("utf-8")
+    )
+    return digest.hexdigest()
 
 
 def _cohort_equal_macro_f1(
@@ -573,7 +609,7 @@ def _structural_regularization(
 ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
     core = _core(model)
     if str(CFG.SPARSITY_MODE).lower() != "target":
-        raise RuntimeError("InterGATE V6 implementa el protocolo target-sparsity.")
+        raise RuntimeError("InterGATE V8 implementa el protocolo target-sparsity.")
     sparsity = float(CFG.SPARSITY_LAMBDA) * model.sparsity_penalty(
         target=float(sparsity_target),
         entropy_beta=float(CFG.SPARSITY_BINARIZE),
@@ -657,7 +693,7 @@ def train_transport_graph_learning(
     checkpoint_path: Optional[Path] = None,
     resume: bool = True,
 ) -> Tuple[nn.Module, Dict[str, torch.Tensor], float, pd.DataFrame]:
-    """Train one V6 carrier with first-order structural meta-updates."""
+    """Train one V8 carrier with first-order structural meta-updates."""
     transport = transport or TransportConfig.from_global(CFG)
     device = CFG.DEVICE
     cohort_order = assert_transport_runtime(
@@ -668,7 +704,7 @@ def train_transport_graph_learning(
     val_idx = np.asarray(val_idx, dtype=np.int64)
     if _RT.get("sample_weights", None) is not None:
         raise NotImplementedError(
-            "InterGATE V6 no mezcla pesos muestrales con el metaobjetivo; use "
+            "InterGATE V8 no mezcla pesos muestrales con el metaobjetivo; use "
             "la ponderación de clases prespecificada."
         )
 
@@ -715,6 +751,10 @@ def train_transport_graph_learning(
     best_score = -float("inf")
     patience_counter = 0
     history: List[Dict[str, Any]] = []
+    training_contract_sha256 = _training_contract_fingerprint(
+        X_gene, X_h, y, cohort_array, train_idx, val_idx,
+        np.asarray(test_idx, dtype=np.int64),
+    )
 
     if checkpoint_path is not None and resume and checkpoint_path.exists():
         saved = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
@@ -722,6 +762,11 @@ def train_transport_graph_learning(
             raise RuntimeError("El checkpoint pertenece a otro protocolo transport.")
         if saved.get("transport_config") != asdict(transport):
             raise RuntimeError("La configuración cambió desde el checkpoint.")
+        if saved.get("training_contract_sha256") != training_contract_sha256:
+            raise RuntimeError(
+                "El checkpoint no corresponde a la configuración V8 y al "
+                "split de desarrollo actuales. Use un directorio nuevo."
+            )
         model.load_state_dict(saved["model_state"])
         optimizer.load_state_dict(saved["optimizer_state"])
         start_episode = int(saved["episode"]) + 1
@@ -731,7 +776,7 @@ def train_transport_graph_learning(
         history = list(saved.get("history", []))
         _restore_rng_state(saved["rng_state"])
         print(
-            f"[InterGATE-V6] reanudado en episodio {start_episode} "
+            f"[InterGATE-V8] reanudado en episodio {start_episode} "
             f"desde {checkpoint_path}",
             flush=True,
         )
@@ -950,6 +995,12 @@ def train_transport_graph_learning(
             "n_meta_train_draws": int(seen),
             "n_meta_validation_draws": int(last_step * batch_size),
             "steps_completed": int(last_step),
+            "microbatch_size": int(batch_size),
+            "accumulation_steps": int(accum_steps),
+            "samples_per_meta_train_flow": int(seen),
+            "samples_per_meta_validation_flow": int(
+                last_step * batch_size
+            ),
             "keep_ratio": float(keep_train),
             "target_budget": bool(at_target),
             "gate_tau": float(gate_tau),
@@ -975,7 +1026,7 @@ def train_transport_graph_learning(
         }
         history.append(row)
         print(
-            "[InterGATE-V6] "
+            "[InterGATE-V8] "
             f"episode={episode:03d}/{transport.episodes} "
             f"heldout={heldout} keep={keep_train:.6f} "
             f"Lmeta={row['loss_meta_validation']:.4f} "
@@ -990,6 +1041,9 @@ def train_transport_graph_learning(
             _atomic_torch_save({
                 "protocol_version": transport.protocol_version,
                 "transport_config": asdict(transport),
+                "training_contract_sha256": training_contract_sha256,
+                "model_config_sha256": model_config_fingerprint(CFG),
+                "implementation_sha256": implementation_fingerprint(),
                 "episode": int(episode),
                 "model_state": {
                     name: value.detach().cpu()
@@ -1004,7 +1058,7 @@ def train_transport_graph_learning(
             }, checkpoint_path)
 
         if at_target and patience_counter >= int(transport.patience):
-            print("[InterGATE-V6] early stopping.", flush=True)
+            print("[InterGATE-V8] early stopping.", flush=True)
             break
 
     if best_state is None:
@@ -1292,7 +1346,7 @@ def estimate_cohort_transport_support(
     biology_bundle = _RT.get("biology_evidence_bundle", None)
     if biology_bundle is None:
         raise RuntimeError(
-            "V6 requiere biology_evidence_bundle para construir las redes "
+            "V8 requiere biology_evidence_bundle para construir las redes "
             "diferenciales."
         )
     context_score = np.asarray(
@@ -1356,6 +1410,10 @@ def estimate_cohort_transport_support(
         "protocol_version": transport.protocol_version,
         "support_steps": int(transport.support_steps),
         "support_batches": int(transport.support_batches),
+        "support_microbatch_size": int(batch_size),
+        "support_samples_per_step": int(
+            transport.support_batches * batch_size
+        ),
         "biology_score_context_weight": float(
             transport.biology_score_context_weight
         ),
@@ -1463,11 +1521,11 @@ def biology_graphs_from_transport_support(
     support: Mapping[str, Any],
     class_names: Sequence[str],
 ) -> Dict[int, Dict[str, Any]]:
-    """Materialise the V6 differential, module-aware biological networks."""
+    """Materialise the V8 differential, module-aware biological networks."""
     core = _core(model)
     biology_bundle = _RT.get("biology_evidence_bundle", None)
     if biology_bundle is None:
-        raise RuntimeError("Falta biology_evidence_bundle en el runtime V6.")
+        raise RuntimeError("Falta biology_evidence_bundle en el runtime V8.")
     context = torch.as_tensor(
         biology_bundle["context_score"], dtype=torch.float32
     )
@@ -1680,6 +1738,12 @@ def save_transport_support(
         ),
         "support_steps": int(support["support_steps"]),
         "support_batches_per_step": int(support["support_batches"]),
+        "support_microbatch_size": int(
+            support["support_microbatch_size"]
+        ),
+        "support_samples_per_step": int(
+            support["support_samples_per_step"]
+        ),
         "biology_score_weights": {
             "differential_strength": 1.0,
             "signed_context_agreement": float(
@@ -1743,6 +1807,26 @@ def _completed_transport_result(
         for key, value in asdict(transport).items()
     ):
         return None
+    current = cfg_to_dict(CFG_FULL)
+    for field, value in asdict(CFG_FULL).items():
+        if meta.get(field) != value:
+            return None
+    if meta.get("model_config_sha256") != current.get(
+        "model_config_sha256"
+    ):
+        return None
+    if meta.get("implementation_sha256") != current.get(
+        "implementation_sha256"
+    ):
+        return None
+    current_dataset = current.get("dataset_signature")
+    if (
+        not isinstance(current_dataset, dict)
+        or len(str(current_dataset.get("content_sha256", ""))) != 64
+    ):
+        return None
+    if meta.get("dataset_signature") != current_dataset:
+        return None
     return dict(meta.get("metrics", {}))
 
 
@@ -1755,7 +1839,7 @@ def run_transport_seed(
     force: bool = False,
     artifact_name: str = TRANSPORT_ARTIFACT_NAME,
 ) -> Dict[str, Any]:
-    """Run InterGATE V6, cohort support, fixed Phase 2 and save both graphs."""
+    """Run InterGATE V8, cohort support, fixed Phase 2 and save both graphs."""
     from .model import build_pruned_model_from
     from .training import finetune_pruned
 
@@ -1791,7 +1875,7 @@ def run_transport_seed(
             artifact_name=artifact_name,
         )
         if completed is not None:
-            print(f"[InterGATE-V6] reutilizando bundle completo: {run_dir}")
+            print(f"[InterGATE-V8] reutilizando bundle completo: {run_dir}")
             return completed
 
     loss_fn, class_weights_t = _class_weight_loss(
@@ -1882,7 +1966,14 @@ def run_transport_seed(
         edge_index_union.reshape(-1)
     ).detach().cpu().numpy().astype(np.int64)
     nodes_used.sort()
-    X_comp = X_full[:, nodes_used]
+    # V8-3. La rama tabular del híbrido heredaba el recorte a |nodes_used|.
+    # Se concatena el universo conectado completo y
+    # HybridGNNTabular.forward separa ambos bloques.
+    tab_full = bool(getattr(CFG, "TAB_FULL_GENE_UNIVERSE", False))
+    X_comp = (
+        np.hstack([X_full[:, nodes_used], X_full]).astype(np.float32)
+        if tab_full else X_full[:, nodes_used]
+    )
     genes_comp = [genes_full[index] for index in nodes_used]
     old_to_new = np.full(X_full.shape[1], -1, dtype=np.int64)
     old_to_new[nodes_used] = np.arange(len(nodes_used), dtype=np.int64)
@@ -1925,6 +2016,14 @@ def run_transport_seed(
         fusion_dropout=CFG.HYBRID_FUSION_DROPOUT,
         blend_logits=CFG.HYBRID_BLEND_LOGITS,
         blend_init=CFG.HYBRID_BLEND_INIT,
+        use_node_identity=bool(getattr(CFG, "USE_NODE_IDENTITY", False)),
+        nodes_used_full=nodes_used,
+        tab_in_dim=int(
+            X_full.shape[1] if tab_full else len(nodes_used)
+        ),
+        tab_hidden_dim=int(getattr(CFG, "HYBRID_TAB_HIDDEN", 0)) or None,
+        branch_dropout_tab=float(getattr(CFG, "BRANCH_DROPOUT_TAB", 0.0)),
+        branch_dropout_gnn=float(getattr(CFG, "BRANCH_DROPOUT_GNN", 0.0)),
     )
     train_loader_comp = _make_loader(
         X_comp, X_h, y, train_idx,
@@ -1960,6 +2059,10 @@ def run_transport_seed(
         lr_fusion_mult=float(_RT.get("PHASE2_LR_FUSION_MULT", 2.0)),
         sample_weights_full=None,
         xh_mode_B=str(CFG.CLASS_GRAPH_XH_MODE),
+        expert_lambda=float(
+            getattr(CFG, "EXPERT_DEEP_SUPERVISION_LAMBDA", 0.0)
+        ),
+        gnn_aux_lambda=float(getattr(CFG, "GNN_AUX_LOSS_LAMBDA", 0.0)),
     )
     probability, truth = predict_proba_xh_mode(
         model_phase2, None, val_loader_comp, CFG.DEVICE,
@@ -1971,7 +2074,7 @@ def run_transport_seed(
         "seed": int(seed),
         "protocol_version": transport.protocol_version,
         "evaluation_split": "development_validation",
-        "external_opened": False,
+        "external_opened": bool(np.asarray(test_idx).size > 0),
         "transport_episodes_completed": int(history["episode"].max()),
         "transport_best_validation_score_phase1": float(best_score),
         "val_macro_f1_phase1_transport_consensus": float(
@@ -2038,6 +2141,7 @@ def run_transport_seed(
     meta["transport_protocol"] = {
         **asdict(transport),
         "artifact_name": artifact_name,
+        "model_config_sha256": model_config_fingerprint(CFG),
         "completed": True,
         "development_cohorts": list(support["cohort_order"]),
         "episode_outer_samples": "training_split_of_heldout_development_cohort",

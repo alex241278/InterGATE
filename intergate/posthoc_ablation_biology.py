@@ -1,4 +1,4 @@
-"""Reprocess trained InterGATE V6 ablations with the locked 0.075 score.
+"""Reprocess trained InterGATE ablations with the locked 0.075 score.
 
 Only dense structural exports from the already completed FULL and four atomic
 ablation arms are read.  No optimizer, model checkpoint or external sample is
@@ -30,8 +30,6 @@ from .notebook04_controls import (
 from .reviewer_analysis import enrichment_for_panels
 from .transport import TransportConfig
 from .posthoc_biology_common import (
-    EXPECTED_EXACT_K,
-    EXPECTED_FULL_STRICT_EDGES,
     LOCKED_CONTEXT_WEIGHT,
     LOCKED_SEEDS,
     LOCKED_SUPPORT_WEIGHT,
@@ -73,6 +71,15 @@ def _locked_full_seed_table(
         / "seed_tables"
         / f"seed_{int(seed)}"
         / f"biology_edges_{safe_name(target_class)}.csv"
+    )
+
+
+def _locked_full_seed_root(results_root: Path) -> Path:
+    return (
+        results_root
+        / "04_controls"
+        / "locked_biology_score_w0075"
+        / "seed_tables"
     )
 
 
@@ -205,6 +212,22 @@ def run_locked_score_ablation_biology(
         candidates_file, index=False, compression="gzip"
     )
 
+    # Exact-K and the FULL strict-core size are observed outputs. Infer them
+    # directly from the score-locked FULL tables.
+    locked_full_root = _locked_full_seed_root(results_root)
+    full_reference_strict, full_reference_seed_frames = (
+        strict_edge_core_from_seed_tables(
+            locked_full_root,
+            seeds=seeds,
+            class_name=target_class,
+            expected_k=None,
+        )
+    )
+    expected_exact_k = int(len(full_reference_seed_frames[0]))
+    expected_full_strict_ids = set(
+        full_reference_strict.candidate_edge_id.astype(int)
+    )
+
     rebuilt_rows = []
     strict_by_arm: dict[str, pd.DataFrame] = {}
     consensus_by_arm: dict[str, pd.DataFrame] = {}
@@ -246,9 +269,9 @@ def run_locked_score_ablation_biology(
             table = table.rename(
                 columns={"transport_support": "selection_frequency"}
             )
-            if len(table) != EXPECTED_EXACT_K:
+            if len(table) != expected_exact_k:
                 raise RuntimeError(
-                    f"{arm}/seed={seed}: {len(table)} != {EXPECTED_EXACT_K}."
+                    f"{arm}/seed={seed}: {len(table)} != {expected_exact_k}."
                 )
             if arm == "FULL":
                 _verify_full_reconstruction(
@@ -289,11 +312,14 @@ def run_locked_score_ablation_biology(
             arm_seed_root,
             seeds=seeds,
             class_name=target_class,
-            expected_k=EXPECTED_EXACT_K,
+            expected_k=expected_exact_k,
         )
-        if arm == "FULL" and len(strict) != EXPECTED_FULL_STRICT_EDGES:
+        if arm == "FULL" and set(
+            strict.candidate_edge_id.astype(int)
+        ) != expected_full_strict_ids:
             raise RuntimeError(
-                f"FULL estricto={len(strict)}; esperado={EXPECTED_FULL_STRICT_EDGES}."
+                "El núcleo FULL reconstruido no coincide con las tablas "
+                "V8 bloqueadas."
             )
         strict.to_csv(
             strict_root / f"strict_5of5_{safe_name(arm)}.csv", index=False
@@ -467,8 +493,8 @@ def run_locked_score_ablation_biology(
             "context_weight": LOCKED_CONTEXT_WEIGHT,
             "support_weight": LOCKED_SUPPORT_WEIGHT,
         },
-        "exact_k_per_seed": EXPECTED_EXACT_K,
-        "full_expected_strict_edges": EXPECTED_FULL_STRICT_EDGES,
+        "exact_k_per_seed": expected_exact_k,
+        "full_reference_strict_edges": len(expected_full_strict_ids),
         "strict_definition": "identical directed candidate edge in all five seeds",
         "signature_manifest_reused": str(
             results_root / "05_biology_validation" / "locked_signature_manifest.json"

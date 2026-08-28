@@ -19,8 +19,7 @@ jobs:
         run: python -m compileall -q intergate data_prepare scripts tests
       - name: Check notebook contract
         run: python tests/check_notebook_contract.py
-      - name: Check protocol alignment
+      - name: Check protocol and manuscript alignment
         run: python tests/test_protocol_alignment.py
       - name: Run synthetic invariance checks
-        run: python tests/test_v6_synthetic.py
-
+        run: python tests/test_current_synthetic.py

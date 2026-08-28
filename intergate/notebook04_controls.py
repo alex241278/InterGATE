@@ -64,7 +64,7 @@ class Notebook04Options:
     def validate(self) -> None:
         if self.target_class != "Basal-like":
             raise ValueError(
-                "Notebook 04 V6 está preespecificado para Basal-like."
+                "Notebook 04 V8 está preespecificado para Basal-like."
             )
         if self.ablation_run_mode not in {"pilot", "confirmatory"}:
             raise ValueError(
@@ -367,21 +367,21 @@ def build_trained_arm_specs(
 
     return {
         "FULL": ArmSpec(
-            artifact_name="INTERGATE_V6",
+            artifact_name="INTERGATE_V8",
             model_config=MODEL_CFG_FULL,
             transport=base_transport,
             changed_component="none_reference",
             reused=True,
         ),
         "NO_CONTEXT_LOSS": ArmSpec(
-            artifact_name="INTERGATE_V6_ABL_NO_CONTEXT_LOSS",
+            artifact_name="INTERGATE_V8_ABL_NO_CONTEXT_LOSS",
             model_config=replace(MODEL_CFG_FULL, name="NO_CONTEXT_LOSS"),
             transport=replace(base_transport, biology_context_lambda=0.0),
             changed_component="biology_context_loss_weight",
             reused=False,
         ),
         "NO_COHORT_QUERY_LOSS": ArmSpec(
-            artifact_name="INTERGATE_V6_ABL_NO_COHORT_QUERY_LOSS",
+            artifact_name="INTERGATE_V8_ABL_NO_COHORT_QUERY_LOSS",
             model_config=replace(
                 MODEL_CFG_FULL, name="NO_COHORT_QUERY_LOSS"
             ),
@@ -390,7 +390,7 @@ def build_trained_arm_specs(
             reused=False,
         ),
         "NO_EDGE_TYPE_CALIBRATION": ArmSpec(
-            artifact_name="INTERGATE_V6_ABL_NO_EDGE_TYPE_CALIBRATION",
+            artifact_name="INTERGATE_V8_ABL_NO_EDGE_TYPE_CALIBRATION",
             model_config=replace(
                 MODEL_CFG_FULL,
                 name="NO_EDGE_TYPE_CALIBRATION",
@@ -401,7 +401,7 @@ def build_trained_arm_specs(
             reused=False,
         ),
         "NO_SIGNED_WEIGHT": ArmSpec(
-            artifact_name="INTERGATE_V6_ABL_NO_SIGNED_WEIGHT",
+            artifact_name="INTERGATE_V8_ABL_NO_SIGNED_WEIGHT",
             model_config=replace(
                 MODEL_CFG_FULL,
                 name="NO_SIGNED_WEIGHT",

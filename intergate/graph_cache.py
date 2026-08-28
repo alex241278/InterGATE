@@ -90,6 +90,18 @@ def _xh_config_fingerprint(
     return hashlib.sha256(blob.encode()).hexdigest()[:12]
 
 
+def _array_fingerprint(*values: np.ndarray) -> str:
+    """Hash complete numerical arrays for collision-resistant cache keys."""
+    digest = hashlib.sha256()
+    for value in values:
+        array = np.ascontiguousarray(np.asarray(value))
+        digest.update(str(array.dtype).encode("ascii", errors="replace"))
+        digest.update(json.dumps(list(array.shape)).encode("ascii"))
+        digest.update(memoryview(array).cast("B"))
+        digest.update(b"\0")
+    return digest.hexdigest()[:16]
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 #  1.  BACKBONE GRAPH
 # ═══════════════════════════════════════════════════════════════════════════
@@ -225,10 +237,9 @@ def get_or_build_Xh(
     # Fingerprint: genes + config de reguladores + hash de datos de entrada
     gfp = _genes_fingerprint(genes)
     xfp = _xh_config_fingerprint(stats, min_targets, max_regulators)
-    # Hash rápido de los datos escalados (forma + muestra de valores)
-    data_hash = hashlib.sha256(
-        f"{Xs_gene.shape}|{Xs_gene[:3, :5].tobytes().hex()}|{Xs_gene[-3:, -5:].tobytes().hex()}".encode()
-    ).hexdigest()[:12]
+    # Hash completo: evita reutilizar X_h si cambia una zona no muestreada de
+    # la matriz o si cambia el backbone manteniendo el mismo universo génico.
+    data_hash = _array_fingerprint(Xs_gene, edge_index)
 
     tag_part = f"__{tag}" if tag else ""
     fname = f"Xh__{gfp}__{xfp}__{data_hash}{tag_part}.npz"

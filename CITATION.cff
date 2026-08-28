@@ -2,7 +2,8 @@ cff-version: 1.2.0
 message: "If you use InterGATE, please cite the associated manuscript."
 title: "InterGATE: reproducible biology-first sparse interactome learning"
 type: software
-version: 6.0.0
+version: 8.1.0
+date-released: 2026-08-28
 repository-code: "https://github.com/alex241278/InterGATE"
 license: MIT
 authors:

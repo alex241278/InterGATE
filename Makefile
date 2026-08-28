@@ -24,5 +24,4 @@ test:
 	$(PYTHON) -m compileall -q intergate data_prepare scripts tests
 	$(PYTHON) tests/check_notebook_contract.py
 	$(PYTHON) tests/test_protocol_alignment.py
-	$(PYTHON) tests/test_v6_synthetic.py
-
+	$(PYTHON) tests/test_current_synthetic.py

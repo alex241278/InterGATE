@@ -1,4 +1,4 @@
-"""Biology-first network evidence and post-selection for InterGATE V6.
+"""Biology-first network evidence and post-selection for InterGATE V8.
 
 The predictive graph and the biological graph answer different questions.
 Prediction uses the total class score (shared backbone plus class deviation).
@@ -598,7 +598,7 @@ def aggregate_biology_seed_tables(
     output_dir.mkdir(parents=True, exist_ok=True)
     seeds = tuple(map(int, seeds))
     if len(seeds) < 2 or len(set(seeds)) != len(seeds):
-        raise ValueError("Se requieren al menos dos semillas externas distintas.")
+        raise ValueError("Se requieren al menos dos semillas outer distintas.")
     result: Dict[str, Any] = {}
     for class_name in class_names:
         safe = "".join(

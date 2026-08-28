@@ -117,6 +117,36 @@ def _connectivity_options(model):
 # ── Prediction ────────────────────────────────────
 
 @torch.no_grad()
+def predict_proba_gnn_branch(model, adj, loader, device, xh_mode: str = "orig"):
+    """Probabilidades de la rama GNN sola, sin pasar por la fusion.
+
+    V8. Sirve para vigilar el colapso de rama durante la fase 2B: si el
+    macro-F1 de esta rama se queda plano mientras el de la fusion sube, el
+    grafo no esta aprendiendo y el modelo vuelve a apoyarse solo en la
+    expresion cruda.
+    """
+    model.eval()
+    try:
+        dev = next(model.parameters()).device
+    except StopIteration:
+        dev = device
+    all_proba, all_y = [], []
+    for Xg, Xh, yb, _ in loader:
+        Xg = torch.as_tensor(Xg).to(device=dev, dtype=torch.float32)
+        Xh = torch.as_tensor(Xh).to(device=dev, dtype=torch.float32)
+        yb = torch.as_tensor(yb).to(device=dev, dtype=torch.long)
+        if xh_mode == "zero":
+            Xh = torch.zeros_like(Xh)
+        model(Xg, adj, Xh)
+        logits = getattr(model, "last_gnn_logits", None)
+        if logits is None:
+            return None, None
+        all_proba.append(torch.softmax(logits, dim=1).detach().cpu().numpy())
+        all_y.append(yb.detach().cpu().numpy())
+    model.train()
+    return np.concatenate(all_proba, 0), np.concatenate(all_y, 0)
+
+
 def predict_proba_xh_mode(model, adj, loader, device, xh_mode="orig"):
     """Predice probabilidades con control explícito del modo de Xh ('orig'|'zero')."""
     model.eval()
@@ -222,6 +252,8 @@ def train_one_epoch(
     conn_use_abs: bool = True,
     sample_weights_full=None,
     structural_regularizers: bool = True,
+    expert_lambda: float = 0.0,
+    gnn_aux_lambda: float = 0.0,
 ) -> float:
     model.train()
     model.gate_tau = float(gate_tau)
@@ -309,6 +341,47 @@ def train_one_epoch(
             #loss = loss_main + float(aux_lambda) * loss_aux
             loss = loss_main
 
+        # V8-2: supervisión profunda de expertos. Cada experto pasa a ser un
+        # clasificador tetraclase valido, de modo que los logits de la
+        # diagonal quedan en una escala comun. Inerte si expert_lambda=0 o si
+        # el forward no expuso la matriz (p. ej. Phase 2A graph_only).
+        if float(expert_lambda) > 0.0:
+            expert = getattr(model, "last_expert_logits", None)
+            if expert is not None:
+                B, E, C = expert.shape
+                flat = expert.reshape(B * E, C)
+                if do_mix:
+                    expert_loss = (
+                        lam * _cross_entropy_per_sample(
+                            flat, y_a.repeat_interleave(E), loss_fn
+                        ).mean()
+                        + (1.0 - lam) * _cross_entropy_per_sample(
+                            flat, y_b.repeat_interleave(E), loss_fn
+                        ).mean()
+                    )
+                else:
+                    expert_loss = _cross_entropy_per_sample(
+                        flat, yb.repeat_interleave(E), loss_fn
+                    ).mean()
+                loss = loss + float(expert_lambda) * expert_loss
+
+        # V8: supervision directa de los logits del GNN. Da gradiente al
+        # grafo por una via que no pasa por la fusion, de modo que la rama
+        # no puede quedarse en cero util.
+        if float(gnn_aux_lambda) > 0.0:
+            gnn_logits = getattr(model, "last_gnn_logits", None)
+            if gnn_logits is not None:
+                if do_mix:
+                    gnn_loss = (
+                        lam * _cross_entropy_per_sample(
+                            gnn_logits, y_a, loss_fn).mean()
+                        + (1.0 - lam) * _cross_entropy_per_sample(
+                            gnn_logits, y_b, loss_fn).mean()
+                    )
+                else:
+                    gnn_loss = _cross_entropy_per_sample(
+                        gnn_logits, yb, loss_fn).mean()
+                loss = loss + float(gnn_aux_lambda) * gnn_loss
 
         if structural_regularizers:
             # La densidad objetivo es independiente de la L1 y permanece activa
@@ -399,7 +472,7 @@ def train_graph_learning(
     """
     Entrena el modelo en modo *graph-learning* y selecciona por macro-F1.
 
-    En V6, ``CFG.GRAPH_LEARNING_XH_MODE`` debe ser ``zero``: X_h no entra en
+    En V8, ``CFG.GRAPH_LEARNING_XH_MODE`` debe ser ``zero``: X_h no entra en
     los gates ni en el clasificador durante Phase 1.
 
     Compatibilidad:
@@ -442,7 +515,7 @@ def train_graph_learning(
     graph_xh_mode = str(getattr(CFG, "GRAPH_LEARNING_XH_MODE", "zero")).lower()
     if graph_xh_mode != "zero":
         raise ValueError(
-            "InterGATE V6 exige GRAPH_LEARNING_XH_MODE='zero'; "
+            "InterGATE V8 exige GRAPH_LEARNING_XH_MODE='zero'; "
             f"recibido {graph_xh_mode!r}."
         )
     forward_xh_mode = "zero"
@@ -758,6 +831,8 @@ def finetune_pruned(
     lr_fusion_mult: float = 2.0,
     sample_weights_full=None,
     xh_mode_B: str = "orig",
+    expert_lambda: float = 0.0,
+    gnn_aux_lambda: float = 0.0,
 ):
     """Fine-tune the fixed consensus under the prespecified two-stage protocol.
 
@@ -855,6 +930,7 @@ def finetune_pruned(
             conn_use_abs=conn_use_abs_model,
             sample_weights_full=sample_weights_full,
             structural_regularizers=False,
+            expert_lambda=0.0,
         )
         proba_va0, y_va0 = predict_proba_xh_mode(
             phase2a_model, adj, dl_va, device, xh_mode="zero"
@@ -891,6 +967,8 @@ def finetune_pruned(
             conn_use_abs=conn_use_abs_model,
             sample_weights_full=sample_weights_full,
             structural_regularizers=False,
+            expert_lambda=float(expert_lambda),
+            gnn_aux_lambda=float(gnn_aux_lambda),
         )
 
         proba_va, y_va = predict_proba_xh_mode(
@@ -924,9 +1002,19 @@ def finetune_pruned(
         else:
             bad += 1
 
+        rama = ""
+        if float(gnn_aux_lambda) > 0.0:
+            proba_g, y_g = predict_proba_gnn_branch(
+                model_pruned, adj, dl_va, device, xh_mode=str(xh_mode_B)
+            )
+            if proba_g is not None:
+                m_g = compute_metrics_full(y_g, proba_g, label_map)
+                rama = (f" | GNN-solo macro_f1={m_g['macro_f1']:.4f}"
+                        f" (fusion={m_va['macro_f1']:.4f})")
+
         print(
             f"[FT-B] epoch={ep:03d} train_loss={loss:.4f} | "
-            f"VAL[{report_label}] {_format_reported_class(report_va)} | "
+            f"VAL[{report_label}] {_format_reported_class(report_va)}{rama} | "
             f"bad={bad}"
         )
 

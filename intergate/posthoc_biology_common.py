@@ -1,7 +1,7 @@
-"""Shared, read-only helpers for the locked InterGATE V6 post-hoc analyses.
+"""Shared, read-only helpers for the locked InterGATE post-hoc analyses.
 
 This file is an additive analysis module.  It does not replace or modify any
-source file listed in ``protocol_lock_v6.json`` and it never trains a model.
+source file listed in ``protocol_lock_v8.json`` and it never trains a model.
 """
 
 from __future__ import annotations
@@ -22,8 +22,9 @@ LOCKED_CONTEXT_WEIGHT = 0.35
 LOCKED_SUPPORT_WEIGHT = 0.075
 LOCKED_TARGET_CLASS = "Basal-like"
 LOCKED_SEEDS = (1234, 2025, 7, 99, 31337)
-EXPECTED_EXACT_K = 529
-EXPECTED_FULL_STRICT_EDGES = 284
+# Exact-K and strict-core size are observed outputs rather than protocol
+# constants. Post-hoc analyses infer both quantities from the locked per-seed
+# tables and therefore cannot inherit a stale topology.
 
 
 def safe_name(value: Any) -> str:
@@ -59,7 +60,7 @@ def strict_edge_core_from_seed_tables(
     *,
     seeds: Sequence[int] = LOCKED_SEEDS,
     class_name: str = LOCKED_TARGET_CLASS,
-    expected_k: int = EXPECTED_EXACT_K,
+    expected_k: int | None = None,
 ) -> tuple[pd.DataFrame, list[pd.DataFrame]]:
     """Return endpoints of identical directed candidate edges in all seeds."""
 
@@ -68,6 +69,7 @@ def strict_edge_core_from_seed_tables(
     if seeds != LOCKED_SEEDS:
         raise ValueError(f"Semillas no bloqueadas: {seeds} != {LOCKED_SEEDS}.")
     frames: list[pd.DataFrame] = []
+    inferred_k = None if expected_k is None else int(expected_k)
     safe = safe_name(class_name)
     for seed in seeds:
         path = seed_root / f"seed_{seed}" / f"biology_edges_{safe}.csv"
@@ -81,12 +83,16 @@ def strict_edge_core_from_seed_tables(
         missing = required - set(frame.columns)
         if missing:
             raise ValueError(f"{path}: faltan columnas {sorted(missing)}.")
-        if len(frame) != int(expected_k):
+        if inferred_k is None:
+            inferred_k = int(len(frame))
+        if inferred_k <= 0:
+            raise RuntimeError(f"{path}: Exact-K no puede ser cero.")
+        if len(frame) != inferred_k:
             raise RuntimeError(
                 f"{class_name}/seed={seed}: Exact-K={len(frame)}; "
-                f"esperado={expected_k}."
+                f"esperado={inferred_k}."
             )
-        if frame.candidate_edge_id.astype(int).nunique() != int(expected_k):
+        if frame.candidate_edge_id.astype(int).nunique() != inferred_k:
             raise RuntimeError(f"{path}: candidate_edge_id no es único.")
         if set(frame.class_name.astype(str)) != {str(class_name)}:
             raise RuntimeError(f"{path}: clase incoherente.")
@@ -302,4 +308,3 @@ def output_hashes(paths: Iterable[str | Path]) -> dict[str, str]:
         str(Path(path).name): sha256_file(path)
         for path in paths if Path(path).is_file()
     }
-

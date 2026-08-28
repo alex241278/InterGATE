@@ -1,4 +1,4 @@
-"""Locked biological validation and candidate-matched topology nulls for V6."""
+"""Locked biological validation and candidate-matched topology nulls for V8."""
 
 from __future__ import annotations
 

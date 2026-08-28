@@ -30,7 +30,7 @@ def load_expression_and_metadata(
 ) -> Tuple[pd.DataFrame, np.ndarray, np.ndarray]:
     """Load the immutable train and external-test outputs of data_prepare.
 
-    ``expr_csv``/``meta_csv`` are intentionally not accepted in protocol V6:
+    ``expr_csv``/``meta_csv`` are intentionally not accepted in protocol V8:
     a single combined file would erase the split boundary. Paths are taken
     from ``CFG.TRAIN_*`` and ``CFG.TEST_*`` (or their environment overrides).
 
@@ -42,7 +42,7 @@ def load_expression_and_metadata(
     """
     if expr_csv is not None or meta_csv is not None:
         raise ValueError(
-            "El protocolo V6 no admite una matriz combinada. Configura las "
+            "El protocolo V8 no admite una matriz combinada. Configura las "
             "cuatro rutas TRAIN/TEST de M-ComBat en CFG."
         )
     if (sample_col, label_col, cohort_col) != (

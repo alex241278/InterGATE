@@ -11,7 +11,7 @@ INTERGATE_TRAIN_EXPR_CSV    Explicit M-ComBat train matrix
 INTERGATE_TEST_EXPR_CSV     Explicit M-ComBat external-test matrix
 INTERGATE_TRAIN_META_CSV    Explicit train metadata
 INTERGATE_TEST_META_CSV     Explicit external-test metadata
-INTERGATE_RAW_DATA_DIR      Cache directory for raw public cohort files
+INTERGATE_RAW_DATA_DIR      Directory where Zenodo files are downloaded
 INTERGATE_EXTERNAL_DATA_DIR Directory for OmniPath/HuRI raw files
 INTERGATE_CACHE_ROOT        Root directory for derived caches
 INTERGATE_ARTIFACTS_ROOT    Directory for trained artifacts
@@ -19,7 +19,8 @@ INTERGATE_ARTIFACTS_ROOT    Directory for trained artifacts
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Tuple, Optional
+from typing import Any, Tuple, Optional
+import hashlib
 import json
 import os
 
@@ -45,6 +46,11 @@ class InterGATEConfig:
 
     # ── Repository / data paths ─────────────────────────────
     PROJECT_ROOT: Path = PROJECT_ROOT
+    MODEL_VERSION: str = "8.1.0"
+    ZENODO_DOI: str = "10.5281/zenodo.20817487"
+    ZENODO_RECORD_ID: str = "20817487"
+    ZENODO_API_URL: str = "https://zenodo.org/api/records/20817487"
+
     DATA_PREPARE_DIR: Path = DEFAULT_DATA_PREPARE_DIR
     DATA_DIR: Path = DEFAULT_DATA_DIR
     RAW_DATA_DIR: Path = DEFAULT_RAW_DATA_DIR
@@ -168,7 +174,7 @@ class InterGATEConfig:
     # base_logit + edge_logit_delta[c] y aporta solo el logit de la clase c.
     # La etiqueta real nunca decide qué grafo se ejecuta (sin target leakage).
     PER_LABEL_GRAPHS: bool = True
-    # V6 hace identificable la descomposición ``backbone + desviación de
+    # V8 hace identificable la descomposición ``backbone + desviación de
     # subtipo`` centrando los deltas entre clases. No se fuerza que los grafos
     # sean disjuntos: los mecanismos realmente compartidos permanecen en el
     # backbone común.
@@ -200,7 +206,7 @@ class InterGATEConfig:
     TRAIN_REPORT_LABEL: str = "Basal-like"
     # True recupera el diccionario completo de poda para depuración.
     TRAIN_LOG_FULL_PRUNING: bool = False
-    # Uso de X_h durante Phase 1: V6 exige "zero".
+    # Uso de X_h durante Phase 1: V8 exige "zero".
     GRAPH_LEARNING_XH_MODE: str = "zero"
     # Uso de X_h en Phase 2B y evaluación final. Phase 2A es estrictamente
     # graph-only: ni X_h ni la rama tabular/fusión participan.
@@ -221,8 +227,8 @@ class InterGATEConfig:
     ACCUM_STEPS: int = 20
     # Fase 1 ejecuta un experto GNN por clase para cada muestra. Un microbatch
     # pequeño limita la VRAM; la acumulación mantiene el batch efectivo.
-    GRAPH_BATCH_SIZE: int = 4
-    GRAPH_ACCUM_STEPS: int = 60
+    GRAPH_BATCH_SIZE: int = 2
+    GRAPH_ACCUM_STEPS: int = 120
     PATIENCE: int = 30
     FOCAL_GAMMA: float = 2.0
 
@@ -273,7 +279,7 @@ class InterGATEConfig:
     SIGNED_CHANNELS_MODE: str = "type_only"
 
     # El antiguo hinge intentaba dar grado a todos los nodos del interactoma y
-    # favorecía muchas parejas aisladas bajo presupuestos muy pequeños. V6 no
+    # favorecía muchas parejas aisladas bajo presupuestos muy pequeños. V8 no
     # lo usa en el objetivo; la coherencia se impone después mediante una
     # selección modular Exact-K auditable.
     ADD_CONNECTIVITY_PENALTY: bool = False
@@ -285,7 +291,7 @@ class InterGATEConfig:
     DO_STABILITY_SELECTION: bool = False
 
     # ── Reproducibilidad entre semillas ──────────────────
-    # V6 ejecuta cinco semillas principales. No lanza las ocho corridas
+    # V8 ejecuta cinco semillas principales. No lanza las ocho corridas
     # internas históricas: el soporte se estima por deleción de cohorte y la
     # agregación Exact-K ocurre directamente entre estas cinco salidas.
     OUTER_RUNS: int = 5
@@ -295,7 +301,7 @@ class InterGATEConfig:
     STAB_EPOCHS: int = 0
     STAB_KEEP_FINAL: float = 0.01
     # Campos conservados para que los módulos históricos sigan importando;
-    # no gobiernan ningún notebook V6.
+    # no gobiernan ningún notebook V8.
     STAB_FREQ_THR: float = 0.8
     STAB_STRICT_FREQ_THR: float = 1.0
     # Entre los cinco consensos Exact-K externos, la firma biológica
@@ -308,11 +314,13 @@ class InterGATEConfig:
     STABILITY_DATA_RESAMPLING: bool = False
     STABILITY_SCOPE: str = "algorithmic_randomness_fixed_development_data"
 
-    # ── InterGATE V6: cohort-transport structural meta-learning ─────
-    # Esta es la única ruta principal de los notebooks V6. Las funciones
+    # ── InterGATE V8: cohort-transport structural meta-learning ─────
+    # Esta es la única ruta principal de los notebooks V8. Las funciones
     # históricas se conservan como compatibilidad interna, pero no forman parte
     # de la secuencia ejecutable entregada.
-    TRANSPORT_PROTOCOL_VERSION: str = "intergate-v6-biology-first-v1"
+    TRANSPORT_PROTOCOL_VERSION: str = (
+        "intergate-v8-biology-first-v2-matched-budget"
+    )
     # Un episodio retiene una cohorte de desarrollo, adapta únicamente los
     # parámetros estructurales con las otras cohortes y calcula la pérdida
     # exterior en la cohorte retenida. Con cuatro cohortes, 60 episodios
@@ -335,15 +343,17 @@ class InterGATEConfig:
     # Esto evita que GSE20711 se recicle decenas de veces mientras GSE96058 no
     # completa ni una pasada.
     TRANSPORT_BALANCED_SAMPLING: bool = True
-    TRANSPORT_STEPS_PER_EPISODE: int = 96
+    # Cada episodio procesa 384 muestras mediante microbatches de tamaño 2 y
+    # realiza dos actualizaciones (120 + 72 microbatches) con acumulación 120.
+    TRANSPORT_STEPS_PER_EPISODE: int = 192
     TRANSPORT_CHECKPOINT_METRIC: str = "cohort_macro_f1"
-    # Auditoría final: cinco pasos de influencia estructural sobre hasta 128
-    # muestras balanceadas (32 microbatches de tamaño 4) por deleción.
+    # Auditoría final: cinco pasos de influencia estructural sobre 128
+    # muestras balanceadas (64 microbatches de tamaño 2) por deleción.
     TRANSPORT_SUPPORT_STEPS: int = 5
-    TRANSPORT_SUPPORT_BATCHES: int = 32
+    TRANSPORT_SUPPORT_BATCHES: int = 64
     TRANSPORT_MIN_COHORT_SAMPLES: int = 2
 
-    # ── InterGATE V6: evidencia diferencial y salida biológica ─────────
+    # ── InterGATE V8: evidencia diferencial y salida biológica ─────────
     BIOLOGY_FIRST: bool = True
     # Evidencia calculada exclusivamente en TRAIN de desarrollo. Para cada
     # arista se contrasta la coexpresión clase vs resto dentro de cada cohorte
@@ -358,14 +368,9 @@ class InterGATEConfig:
     # reproducible. No utiliza firmas conocidas, PAM50, C2:CGP ni DepMap.
     BIOLOGY_CONTEXT_LAMBDA: float = 0.10
     BIOLOGY_CONTEXT_WARMUP_EPISODES: int = 8
-    # Score utilizado durante el entrenamiento para generar las salidas que
-    # después entran en la sensibilidad estructural de desarrollo.
+    # Ranking biológico: contraste de delta + evidencia + soporte de cohorte.
     BIOLOGY_SCORE_CONTEXT_WEIGHT: float = 0.35
     BIOLOGY_SCORE_SUPPORT_WEIGHT: float = 0.25
-    # Coeficiente definitivo seleccionado exclusivamente con desarrollo tras
-    # el ajuste del modelo y antes de abrir el bloque externo. Este valor
-    # gobierna la red biológica bloqueada que se reporta en el manuscrito.
-    DEFINITIVE_BIOLOGY_SCORE_SUPPORT_WEIGHT: float = 0.075
     # El grafo predictivo permanece Exact-K por puntuación total. La salida
     # biológica usa el mismo K, pero selecciona un bosque modular desde un pool
     # mayor de aristas diferenciales.
@@ -373,12 +378,13 @@ class InterGATEConfig:
     BIOLOGY_MODULE_TARGET_COMPONENTS: int = 12
     BIOLOGY_MODULE_MIN_EDGES: int = 3
     BIOLOGY_MATCHED_NULL_DRAWS: int = 1000
+    BIOLOGY_REWIRING_NULL_DRAWS: int = 1000
     BIOLOGY_NONINFERIORITY_MARGIN: float = 0.02
 
     # ── Hybrid model (Phase 2) ──────────────────────────
     USE_HYBRID_MODEL: bool = True
     # Contrato metodológico fijo de Phase 2. No son knobs para el análisis
-    # principal: assert_v6_protocol impide cambiarlos accidentalmente.
+    # principal: assert_v8_protocol impide cambiarlos accidentalmente.
     PHASE2_A_MODE: str = "graph_only"
     PHASE2_FIXED_GRAPH_BYPASS_GATES: bool = True
     PHASE2_FREEZE_STRUCTURAL_PARAMETERS: bool = True
@@ -387,6 +393,30 @@ class InterGATEConfig:
     HYBRID_FUSION_DROPOUT: float = 0.20
     HYBRID_BLEND_LOGITS: bool = True
     HYBRID_BLEND_INIT: float = 0.70
+
+    # ── InterGATE V8: identidad nodal y equilibrio de ramas ─────────
+    V8_PROTOCOL_VERSION: str = (
+        "intergate-v8-biology-first-v2-matched-budget"
+    )
+    V8_ARTIFACT_NAME: str = "INTERGATE_V8"
+    # Debe permanecer False. El externo se abre primero en el notebook 07;
+    # 08b puede volver a leerlo después, exclusivamente para la concordancia
+    # estructural ya fijada y sin selección ni refit.
+    ALLOW_EXTERNAL_DURING_TRAINING: bool = False
+    USE_NODE_IDENTITY: bool = True
+    EXPERT_DEEP_SUPERVISION_LAMBDA: float = 0.20
+    TAB_FULL_GENE_UNIVERSE: bool = True
+    # 0 = usar HIDDEN. >0 desacopla la anchura
+    # de la rama tabular del ancho del GNN. Cambia las formas del state_dict:
+    # los bundles entrenados con valores distintos NO son intercambiables ni
+    # ensamblables entre si.
+    HYBRID_TAB_HIDDEN: int = 256
+
+    # Dropout de modalidad + supervisión directa para evitar que la rama
+    # tabular absorba todo el gradiente de la fase 2B.
+    BRANCH_DROPOUT_TAB: float = 0.30     # anula z_tab por muestra en 2B
+    BRANCH_DROPOUT_GNN: float = 0.0      # simetrico, normalmente 0
+    GNN_AUX_LOSS_LAMBDA: float = 0.50    # CE sobre logits4 propios del GNN
 
     # ── Artifacts ─────────────────────────────────────────
     # Coincide con la raíz que usan todos los notebooks definitivos. De este
@@ -501,7 +531,7 @@ class InterGATEConfig:
 
     # ------------------------------------------------------------------
     def _resolve_task_and_sources(self):
-        """Valida el endpoint V6 y sincroniza las fuentes del grafo."""
+        """Valida el endpoint V8 y sincroniza las fuentes del grafo."""
         if int(self.GRAPH_BATCH_SIZE) <= 0 or int(self.GRAPH_ACCUM_STEPS) <= 0:
             raise ValueError(
                 "GRAPH_BATCH_SIZE y GRAPH_ACCUM_STEPS deben ser positivos."
@@ -510,21 +540,21 @@ class InterGATEConfig:
             raise ValueError("KEEP_MIN (kappa) debe estar en (0, 1].")
         if tuple(self.KAPPA_SENSITIVITY) != (0.007, 0.010, 0.015, 0.020):
             raise ValueError(
-                "El protocolo V6 fija KAPPA_SENSITIVITY=(.007,.010,.015,.020)."
+                "El protocolo V8 fija KAPPA_SENSITIVITY=(.007,.010,.015,.020)."
             )
         if int(self.OUTER_RUNS) != 5:
-            raise ValueError("El protocolo principal fija cinco semillas externas.")
+            raise ValueError("El protocolo principal fija cinco semillas outer.")
         if len(self.STABILITY_SEEDS) != int(self.OUTER_RUNS):
             raise ValueError("STABILITY_SEEDS y OUTER_RUNS no coinciden.")
         if len(set(map(int, self.STABILITY_SEEDS))) != int(self.OUTER_RUNS):
-            raise ValueError("Las semillas externas deben ser distintas.")
+            raise ValueError("Las semillas outer deben ser distintas.")
         if bool(self.DO_STABILITY_SELECTION):
             raise ValueError(
-                "V6 no permite activar las ocho corridas internas históricas."
+                "V8 no permite activar las ocho corridas internas históricas."
             )
         if int(self.STAB_RUNS) != 0 or tuple(self.STAB_SEED_OFFSETS):
             raise ValueError(
-                "V6 fija STAB_RUNS=0 y STAB_SEED_OFFSETS=()."
+                "V8 fija STAB_RUNS=0 y STAB_SEED_OFFSETS=()."
             )
         if not 0.0 < float(self.STAB_FREQ_THR) <= 1.0:
             raise ValueError("STAB_FREQ_THR debe estar en (0, 1].")
@@ -572,6 +602,29 @@ class InterGATEConfig:
             raise ValueError("TRANSPORT_SUPPORT_STEPS debe ser positivo.")
         if int(self.TRANSPORT_STEPS_PER_EPISODE) <= 0:
             raise ValueError("TRANSPORT_STEPS_PER_EPISODE debe ser positivo.")
+        phase1_draws = (
+            int(self.GRAPH_BATCH_SIZE)
+            * int(self.TRANSPORT_STEPS_PER_EPISODE)
+        )
+        phase1_updates = (
+            int(self.TRANSPORT_STEPS_PER_EPISODE)
+            + int(self.GRAPH_ACCUM_STEPS) - 1
+        ) // int(self.GRAPH_ACCUM_STEPS)
+        support_draws = (
+            int(self.GRAPH_BATCH_SIZE)
+            * int(self.TRANSPORT_SUPPORT_BATCHES)
+        )
+        if phase1_draws != 384 or phase1_updates != 2:
+            raise ValueError(
+                "El protocolo exige 384 muestras y 2 actualizaciones por "
+                "episodio de fase 1; se obtuvieron "
+                f"{phase1_draws} y {phase1_updates}."
+            )
+        if support_draws != 128:
+            raise ValueError(
+                "El protocolo exige 128 muestras por paso de soporte; se obtuvieron "
+                f"{support_draws}."
+            )
         if str(self.TRANSPORT_CHECKPOINT_METRIC) not in {
             "cohort_macro_f1", "macro_f1"
         }:
@@ -582,15 +635,15 @@ class InterGATEConfig:
             raise ValueError("TRANSPORT_MIN_COHORT_SAMPLES debe ser al menos 2.")
         if not bool(self.CENTER_CLASS_DELTAS):
             raise ValueError(
-                "V6 exige CENTER_CLASS_DELTAS=True para identificar el "
+                "V8 exige CENTER_CLASS_DELTAS=True para identificar el "
                 "backbone compartido y las desviaciones de subtipo."
             )
         if not bool(self.BIOLOGY_FIRST):
-            raise ValueError("El paquete V6 exige BIOLOGY_FIRST=True.")
+            raise ValueError("El paquete V8 exige BIOLOGY_FIRST=True.")
         if str(self.BIOLOGY_EVIDENCE_METHOD) != (
             "within_cohort_differential_correlation"
         ):
-            raise ValueError("Método de evidencia biológica V6 no reconocido.")
+            raise ValueError("Método de evidencia biológica V8 no reconocido.")
         if int(self.BIOLOGY_MIN_SAMPLES_PER_GROUP) < 4:
             raise ValueError(
                 "BIOLOGY_MIN_SAMPLES_PER_GROUP debe ser al menos 4."
@@ -609,6 +662,8 @@ class InterGATEConfig:
             raise ValueError("BIOLOGY_MODULE_MIN_EDGES debe ser >=1.")
         if int(self.BIOLOGY_MATCHED_NULL_DRAWS) < 0:
             raise ValueError("BIOLOGY_MATCHED_NULL_DRAWS no puede ser negativo.")
+        if int(self.BIOLOGY_REWIRING_NULL_DRAWS) < 0:
+            raise ValueError("BIOLOGY_REWIRING_NULL_DRAWS no puede ser negativo.")
         if set(self.TRAIN_COHORTS) & set(self.TEST_COHORTS):
             raise ValueError("TRAIN_COHORTS y TEST_COHORTS se solapan.")
         if len(self.TRAIN_COHORTS) != 4 or len(self.TEST_COHORTS) != 3:
@@ -624,7 +679,7 @@ class InterGATEConfig:
                 "HER2-enriched y Basal-like."
             )
         if str(self.SPARSITY_MODE).lower() != "target":
-            raise ValueError("El protocolo V6 usa exclusivamente esparsidad objetivo.")
+            raise ValueError("El protocolo V8 usa exclusivamente esparsidad objetivo.")
         if float(self.SPARSITY_BINARIZE) < 0:
             raise ValueError("SPARSITY_BINARIZE debe ser no negativo.")
         if not str(self.TRAIN_REPORT_LABEL).strip():
@@ -638,7 +693,7 @@ class InterGATEConfig:
             )
         graph_xh_mode = str(self.GRAPH_LEARNING_XH_MODE).lower()
         if graph_xh_mode != "zero":
-            raise ValueError("El protocolo V6 exige GRAPH_LEARNING_XH_MODE='zero'.")
+            raise ValueError("El protocolo V8 exige GRAPH_LEARNING_XH_MODE='zero'.")
         self.GRAPH_LEARNING_XH_MODE = graph_xh_mode
         if str(self.CLASS_GRAPH_XH_MODE).lower() not in {"zero", "orig"}:
             raise ValueError(
@@ -692,3 +747,114 @@ class InterGATEConfig:
 
 # Singleton – import this in notebooks
 CFG = InterGATEConfig()
+
+
+# Campos que definen la identidad de un modelo entrenado. Se excluyen rutas,
+# dispositivo y opciones puramente operativas, porque no cambian el modelo.
+MODEL_CONFIG_FIELDS = (
+    "MODEL_VERSION", "TRANSPORT_PROTOCOL_VERSION",
+    "MULTICLASS_LABELS_NO_CONTROL", "TRAIN_COHORTS", "TEST_COHORTS",
+    "GRAPH_SOURCE", "USE_HURI", "USE_OMNIPATH", "USE_STRING",
+    "PER_LABEL_GRAPHS", "CENTER_CLASS_DELTAS", "PER_LABEL_DELTA_L1",
+    "PER_LABEL_DELTA_DIVERSITY_LAMBDA", "PER_LABEL_DELTA_LR_MULT",
+    "CLASS_GRAPH_TARGET_EDGES", "CLASS_GRAPH_STABILITY_FIXED_BUDGET",
+    "SELECT_METRIC", "GRAPH_LEARNING_XH_MODE", "CLASS_GRAPH_XH_MODE",
+    "ADD_SELF_LOOPS_IN_GRAPH", "CONNECTED_ONLY",
+    "ADD_REGULATOR_FEATURES", "REG_STATS", "REG_MIN_GENES",
+    "REG_MAX_REGULATORS",
+    "SCALE_MODE", "USE_QUANTILE", "VAL_SIZE", "SEED",
+    "GRAPH_BATCH_SIZE", "GRAPH_ACCUM_STEPS", "BATCH_SIZE", "ACCUM_STEPS",
+    "PATIENCE", "LR", "WEIGHT_DECAY", "FOCAL_GAMMA", "GATE_TAU_SCHEDULE",
+    "SPARSITY_MODE", "SPARSITY_LAMBDA", "SPARSITY_BINARIZE",
+    "EDGE_L1_PER_EDGE", "AUX_LAMBDA", "KEEP_MIN",
+    "HIDDEN", "NUM_LAYERS", "DROPOUT", "NUM_HEADS", "POOL_HEADS",
+    "XGRAPH_DROPOUT", "KEEP_SELF_LOOPS", "BLOCK_USE_SELF", "BLOCK_RESIDUAL",
+    "EDGE_TYPE_GATING", "SIGNED_CHANNELS", "SIGNED_CHANNELS_MODE",
+    "ADD_CONNECTIVITY_PENALTY", "CONNECTIVITY_LAMBDA",
+    "CONNECTIVITY_MIN_DEG", "CONNECTIVITY_USE_ABS",
+    "USE_MIXUP", "MIXUP_ALPHA", "MIXUP_P",
+    "EPOCHS1", "FT_EPOCHS_A", "FT_EPOCHS_B",
+    "DO_PRETRAIN", "DO_STABILITY_SELECTION",
+    "STABILITY_SEEDS", "OUTER_RUNS", "STAB_RUNS", "STAB_SEED_OFFSETS",
+    "STAB_EPOCHS", "STAB_KEEP_FINAL", "STAB_FREQ_THR",
+    "STAB_STRICT_FREQ_THR", "OUTER_GENE_CORE_THR",
+    "OUTER_GENE_SENSITIVITY_THR", "STABILITY_DATA_RESAMPLING",
+    "STABILITY_SCOPE",
+    "TRANSPORT_EPISODES", "TRANSPORT_INNER_LR", "TRANSPORT_FIRST_ORDER",
+    "TRANSPORT_META_TRAIN_WEIGHT", "TRANSPORT_META_VALIDATION_WEIGHT",
+    "TRANSPORT_TOPOLOGY_LAMBDA", "TRANSPORT_SOFT_TOPK_TAU",
+    "TRANSPORT_QUOTA_END_FRACTION", "TRANSPORT_PATIENCE",
+    "TRANSPORT_BALANCED_SAMPLING", "TRANSPORT_STEPS_PER_EPISODE",
+    "TRANSPORT_CHECKPOINT_METRIC", "TRANSPORT_SUPPORT_STEPS",
+    "TRANSPORT_SUPPORT_BATCHES", "TRANSPORT_MIN_COHORT_SAMPLES",
+    "BIOLOGY_FIRST", "BIOLOGY_EVIDENCE_METHOD",
+    "BIOLOGY_MIN_SAMPLES_PER_GROUP", "BIOLOGY_MIN_COHORTS",
+    "BIOLOGY_EDGE_BATCH_SIZE", "BIOLOGY_META_Z_CLIP",
+    "BIOLOGY_HETEROGENEITY_PENALTY",
+    "BIOLOGY_CONTEXT_LAMBDA", "BIOLOGY_CONTEXT_WARMUP_EPISODES",
+    "BIOLOGY_SCORE_CONTEXT_WEIGHT", "BIOLOGY_SCORE_SUPPORT_WEIGHT",
+    "BIOLOGY_MODULE_POOL_MULTIPLIER", "BIOLOGY_MODULE_TARGET_COMPONENTS",
+    "BIOLOGY_MODULE_MIN_EDGES",
+    "BIOLOGY_MATCHED_NULL_DRAWS", "BIOLOGY_REWIRING_NULL_DRAWS",
+    "BIOLOGY_NONINFERIORITY_MARGIN",
+    "USE_HYBRID_MODEL", "PHASE2_A_MODE",
+    "PHASE2_FIXED_GRAPH_BYPASS_GATES", "PHASE2_FREEZE_STRUCTURAL_PARAMETERS",
+    "HYBRID_TAB_LAYERS", "HYBRID_TAB_DROPOUT", "HYBRID_FUSION_DROPOUT",
+    "HYBRID_BLEND_LOGITS", "HYBRID_BLEND_INIT",
+    "USE_NODE_IDENTITY", "EXPERT_DEEP_SUPERVISION_LAMBDA",
+    "TAB_FULL_GENE_UNIVERSE", "HYBRID_TAB_HIDDEN",
+    "BRANCH_DROPOUT_TAB", "BRANCH_DROPOUT_GNN", "GNN_AUX_LOSS_LAMBDA",
+    "ALLOW_EXTERNAL_DURING_TRAINING",
+)
+
+IMPLEMENTATION_FILES = (
+    "config.py", "model.py", "training.py", "transport.py", "ablation.py",
+    "graph.py", "graph_cache.py", "pruning.py", "biology.py",
+    "runtime_setup.py", "prepared_data.py", "data.py", "losses.py",
+    "stability.py", "utils.py",
+)
+
+
+def _jsonable_config_value(value: Any) -> Any:
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, tuple):
+        return [_jsonable_config_value(item) for item in value]
+    if isinstance(value, list):
+        return [_jsonable_config_value(item) for item in value]
+    if isinstance(value, dict):
+        return {
+            str(key): _jsonable_config_value(item)
+            for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))
+        }
+    return value
+
+
+def model_config_snapshot(cfg: InterGATEConfig = CFG) -> dict[str, Any]:
+    """Return the canonical V8 configuration recorded in every bundle."""
+    return {
+        name: _jsonable_config_value(getattr(cfg, name))
+        for name in MODEL_CONFIG_FIELDS
+    }
+
+
+def model_config_fingerprint(cfg: InterGATEConfig = CFG) -> str:
+    """SHA-256 identity used to reject stale or incompatible checkpoints."""
+    payload = json.dumps(
+        model_config_snapshot(cfg), sort_keys=True, ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def implementation_fingerprint() -> str:
+    """SHA-256 of the source files that define training and graph inference."""
+    digest = hashlib.sha256()
+    module_dir = Path(__file__).resolve().parent
+    for filename in IMPLEMENTATION_FILES:
+        path = module_dir / filename
+        digest.update(filename.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()

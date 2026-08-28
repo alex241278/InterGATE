@@ -40,7 +40,7 @@ resources_biological/msigdb/*
 artifacts/
 cache/
 results/
-results_v6/
+results_v8/
 figures/
 *.pt
 *.pth
@@ -51,4 +51,3 @@ figures/
 build/
 dist/
 *.egg-info/
-

@@ -23,9 +23,20 @@ from .biology import (
 )
 
 
-def assert_v6_protocol(cfg=CFG) -> None:
-    """Fail closed when a biology-first V6 invariant was changed."""
+def assert_v8_protocol(cfg=CFG) -> None:
+    """Fail closed when a biology-first V8 invariant was changed."""
     expected = {
+        "MODEL_VERSION": "8.1.0",
+        "TRANSPORT_PROTOCOL_VERSION": (
+            "intergate-v8-biology-first-v2-matched-budget"
+        ),
+        "V8_PROTOCOL_VERSION": (
+            "intergate-v8-biology-first-v2-matched-budget"
+        ),
+        "GRAPH_SOURCE": "huri_omnipath",
+        "USE_HURI": True,
+        "USE_OMNIPATH": True,
+        "USE_STRING": False,
         "PER_LABEL_GRAPHS": True,
         "GRAPH_LEARNING_XH_MODE": "zero",
         "CLASS_GRAPH_XH_MODE": "orig",
@@ -34,6 +45,25 @@ def assert_v6_protocol(cfg=CFG) -> None:
         "PHASE2_FREEZE_STRUCTURAL_PARAMETERS": True,
         "USE_HYBRID_MODEL": True,
         "SPARSITY_MODE": "target",
+        "ADD_SELF_LOOPS_IN_GRAPH": False,
+        "CONNECTED_ONLY": True,
+        "KEEP_SELF_LOOPS": False,
+        "GRAPH_BATCH_SIZE": 2,
+        "GRAPH_ACCUM_STEPS": 120,
+        "TRANSPORT_STEPS_PER_EPISODE": 192,
+        "TRANSPORT_SUPPORT_BATCHES": 64,
+        "BATCH_SIZE": 8,
+        "ACCUM_STEPS": 20,
+        "HIDDEN": 64,
+        "NUM_LAYERS": 3,
+        "DROPOUT": 0.10,
+        "NUM_HEADS": 4,
+        "POOL_HEADS": 4,
+        "HYBRID_TAB_LAYERS": 2,
+        "HYBRID_TAB_DROPOUT": 0.20,
+        "HYBRID_FUSION_DROPOUT": 0.20,
+        "HYBRID_BLEND_LOGITS": True,
+        "HYBRID_BLEND_INIT": 0.70,
         "CLASS_GRAPH_STABILITY_FIXED_BUDGET": True,
         "SELECT_METRIC": "macro_f1",
         "OUTER_RUNS": 5,
@@ -44,9 +74,28 @@ def assert_v6_protocol(cfg=CFG) -> None:
         "BIOLOGY_EVIDENCE_METHOD": (
             "within_cohort_differential_correlation"
         ),
+        "BIOLOGY_MIN_SAMPLES_PER_GROUP": 8,
+        "BIOLOGY_MIN_COHORTS": 2,
+        "BIOLOGY_EDGE_BATCH_SIZE": 4096,
+        "BIOLOGY_META_Z_CLIP": 6.0,
+        "BIOLOGY_HETEROGENEITY_PENALTY": 0.50,
+        "BIOLOGY_MODULE_POOL_MULTIPLIER": 6,
+        "BIOLOGY_MODULE_TARGET_COMPONENTS": 12,
+        "BIOLOGY_MODULE_MIN_EDGES": 3,
+        "BIOLOGY_NONINFERIORITY_MARGIN": 0.02,
         "ADD_CONNECTIVITY_PENALTY": False,
         "CONNECTIVITY_LAMBDA": 0.0,
         "DO_STABILITY_SELECTION": False,
+        "ALLOW_EXTERNAL_DURING_TRAINING": False,
+        "USE_NODE_IDENTITY": True,
+        "EXPERT_DEEP_SUPERVISION_LAMBDA": 0.20,
+        "TAB_FULL_GENE_UNIVERSE": True,
+        "HYBRID_TAB_HIDDEN": 256,
+        "BRANCH_DROPOUT_TAB": 0.30,
+        "BRANCH_DROPOUT_GNN": 0.0,
+        "GNN_AUX_LOSS_LAMBDA": 0.50,
+        "BIOLOGY_MATCHED_NULL_DRAWS": 1000,
+        "BIOLOGY_REWIRING_NULL_DRAWS": 1000,
     }
     bad = {
         key: (getattr(cfg, key), value)
@@ -54,28 +103,46 @@ def assert_v6_protocol(cfg=CFG) -> None:
         if getattr(cfg, key) != value
     }
     if bad:
-        raise ValueError(f"Overrides incompatibles con el protocolo V6: {bad}")
+        raise ValueError(f"Overrides incompatibles con el protocolo V8: {bad}")
     if abs(float(cfg.KEEP_MIN) - 0.01) > 1e-12:
         raise ValueError("El análisis principal fija kappa=0.01.")
     if tuple(cfg.STABILITY_SEEDS) != (1234, 2025, 7, 99, 31337):
-        raise ValueError("Las semillas externas no son las preespecificadas.")
+        raise ValueError("Las semillas outer no son las preespecificadas.")
     if (int(cfg.FT_EPOCHS_A), int(cfg.FT_EPOCHS_B)) != (5, 80):
         raise ValueError(
-            "Phase 2 V6 requiere cinco epochs graph-only y hasta 80 "
+            "Phase 2 V8 requiere cinco epochs graph-only y hasta 80 "
             "epochs híbridos."
+        )
+    phase1_draws = int(cfg.GRAPH_BATCH_SIZE) * int(
+        cfg.TRANSPORT_STEPS_PER_EPISODE
+    )
+    phase1_updates = (
+        int(cfg.TRANSPORT_STEPS_PER_EPISODE)
+        + int(cfg.GRAPH_ACCUM_STEPS) - 1
+    ) // int(cfg.GRAPH_ACCUM_STEPS)
+    support_draws = int(cfg.GRAPH_BATCH_SIZE) * int(
+        cfg.TRANSPORT_SUPPORT_BATCHES
+    )
+    if (phase1_draws, phase1_updates, support_draws) != (384, 2, 128):
+        raise ValueError(
+            "Presupuesto de entrenamiento incompatible con el protocolo: "
+            f"muestras/episodio={phase1_draws}, "
+            f"actualizaciones/episodio={phase1_updates}, "
+            f"muestras/soporte={support_draws}."
         )
 
 
-# Alias de importación para módulos históricos. Los notebooks entregados en
-# V6 llaman explícitamente a assert_v6_protocol.
-assert_v4_protocol = assert_v6_protocol
+# Alias de importación conservado para compatibilidad de la API pública.
+assert_v4_protocol = assert_v8_protocol
 
 
 def assert_transport_protocol(cfg=CFG) -> None:
-    """Fail closed if a prespecified InterGATE V6 setting was modified."""
-    assert_v6_protocol(cfg)
+    """Fail closed if a prespecified InterGATE V8 setting was modified."""
+    assert_v8_protocol(cfg)
     expected = {
-        "TRANSPORT_PROTOCOL_VERSION": "intergate-v6-biology-first-v1",
+        "TRANSPORT_PROTOCOL_VERSION": (
+            "intergate-v8-biology-first-v2-matched-budget"
+        ),
         "TRANSPORT_EPISODES": 60,
         "TRANSPORT_INNER_LR": 5e-4,
         "TRANSPORT_FIRST_ORDER": True,
@@ -86,16 +153,15 @@ def assert_transport_protocol(cfg=CFG) -> None:
         "TRANSPORT_QUOTA_END_FRACTION": 0.65,
         "TRANSPORT_PATIENCE": 15,
         "TRANSPORT_BALANCED_SAMPLING": True,
-        "TRANSPORT_STEPS_PER_EPISODE": 96,
+        "TRANSPORT_STEPS_PER_EPISODE": 192,
         "TRANSPORT_CHECKPOINT_METRIC": "cohort_macro_f1",
         "TRANSPORT_SUPPORT_STEPS": 5,
-        "TRANSPORT_SUPPORT_BATCHES": 32,
+        "TRANSPORT_SUPPORT_BATCHES": 64,
         "TRANSPORT_MIN_COHORT_SAMPLES": 2,
         "BIOLOGY_CONTEXT_LAMBDA": 0.10,
         "BIOLOGY_CONTEXT_WARMUP_EPISODES": 8,
         "BIOLOGY_SCORE_CONTEXT_WEIGHT": 0.35,
         "BIOLOGY_SCORE_SUPPORT_WEIGHT": 0.25,
-        "DEFINITIVE_BIOLOGY_SCORE_SUPPORT_WEIGHT": 0.075,
     }
     bad = {}
     for key, wanted in expected.items():
@@ -109,7 +175,7 @@ def assert_transport_protocol(cfg=CFG) -> None:
             bad[key] = (observed, wanted)
     if bad:
         raise ValueError(
-            f"Overrides incompatibles con InterGATE V6: {bad}"
+            f"Overrides incompatibles con InterGATE V8: {bad}"
         )
 
 
@@ -122,12 +188,14 @@ def prepare_runtime(cfg=CFG, *, force_rebuild_backbone: bool = False,
     """Load fixed data, fit train-only scaling, build prior and register state.
 
     By default only development is read and ``test_idx`` is empty. The
-    external matrices and labels are opened only with ``include_external=True``
-    in notebook 07, after verification of the protocol lock.
+    External matrices and labels are opened only with ``include_external=True``
+    after verification of the protocol lock: first in notebook 07 for the
+    single predictive evaluation and later, if requested, in notebook 08b for
+    the fixed structural-concordance analysis without refit or selection.
     """
     cfg.refresh_options()
     if validate:
-        assert_v6_protocol(cfg)
+        assert_v8_protocol(cfg)
     bundle = (
         load_prepared_bundle(cfg, validate=True)
         if include_external
@@ -173,7 +241,7 @@ def prepare_runtime(cfg=CFG, *, force_rebuild_backbone: bool = False,
 
     biology = None
     if bool(build_biology_evidence):
-        evidence_cache = Path(cfg.PIPELINE_CACHE_DIR) / "v6_biology_evidence.npz"
+        evidence_cache = Path(cfg.PIPELINE_CACHE_DIR) / "v8_biology_evidence.npz"
         biology_cfg = DifferentialEvidenceConfig(
             min_samples_per_group=int(cfg.BIOLOGY_MIN_SAMPLES_PER_GROUP),
             min_cohorts=int(cfg.BIOLOGY_MIN_COHORTS),
@@ -195,7 +263,7 @@ def prepare_runtime(cfg=CFG, *, force_rebuild_backbone: bool = False,
             )
             if biology is None:
                 raise RuntimeError(
-                    "El cache biológico V6 no existe o no coincide. No se "
+                    "El cache biológico V8 no existe o no coincide. No se "
                     "permite reconstruirlo después de abrir el externo. "
                     "Vuelva al notebook 01 antes de congelar el protocolo."
                 )

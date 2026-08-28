@@ -1,5 +1,5 @@
 {
-  "protocol_version": "intergate-v6-biology-first-v1",
+  "protocol_version": "intergate-v8-biology-first-v2-matched-budget",
   "endpoint": ["LumA", "LumB", "HER2-enriched", "Basal-like"],
   "development_cohorts": ["GSE96058", "GSE25066", "GSE162228", "GSE20711"],
   "external_cohorts": ["TCGA-BRCA", "GSE21653", "GSE1456"],
@@ -15,7 +15,11 @@
   },
   "meta_training": {
     "episodes": 60,
-    "steps_per_episode": 96,
+    "microbatch_size": 2,
+    "accumulation_steps": 120,
+    "steps_per_episode": 192,
+    "samples_per_episode": 384,
+    "optimizer_steps_per_episode": 2,
     "sampling": "balanced_cohort_by_class_round_robin",
     "checkpoint_metric": "cohort_macro_f1",
     "inner_lr": 0.0005,
@@ -25,11 +29,13 @@
   },
   "support_audit": {
     "steps": 5,
-    "batches_per_step": 32,
+    "microbatch_size": 2,
+    "batches_per_step": 64,
+    "samples_per_step": 128,
     "interpretation": "multistep_first_order_influence_not_full_refit"
   },
   "biology_graph": {
-    "training_score_terms": {
+    "score_terms": {
       "absolute_centered_class_delta": 1.0,
       "signed_context_agreement": 0.35,
       "cohort_support": 0.25
@@ -39,7 +45,6 @@
       "signed_context_agreement": 0.35,
       "cohort_support": 0.075
     },
-    "score_lock_timing": "development_only_after_model_fitting_before_external_opening",
     "module_pool_multiplier": 6,
     "target_components": 12,
     "minimum_edges_per_seed_module": 3,
@@ -51,14 +56,31 @@
     "phase2b_max_epochs": 80,
     "structural_parameters_frozen": true,
     "fixed_graph_bypasses_gates": true,
-    "xh_enters_only_post_pooling": true
+    "xh_enters_only_post_pooling": true,
+    "node_identity_embedding": true,
+    "expert_deep_supervision_lambda": 0.2,
+    "tabular_full_connected_gene_universe": true,
+    "tabular_hidden_width": 256,
+    "tabular_branch_dropout": 0.3,
+    "gnn_branch_dropout": 0.0,
+    "gnn_auxiliary_loss_lambda": 0.5
   },
   "validation": {
     "candidate_matched_null_draws": 1000,
+    "directed_rewiring_null_draws": 1000,
     "match_variables": ["edge_type", "prior_sign", "source_out_degree_bin", "target_in_degree_bin"],
     "directed_rewiring_preserves": ["source_out_degree", "target_in_degree", "edge_type", "prior_sign"],
     "pam50_excluded_primary": true,
-    "external_opened_once_after_lock": true,
-    "full_label_permutation_retraining": false
+    "external_predictive_evaluation_only_in_notebook_07_after_lock": true,
+    "postlock_structural_external_analysis": "notebook_08b_no_refit_no_selection",
+    "model_selection_uses_development_only": true,
+    "branch_ablation_scope": "development_validation_posthoc",
+    "branch_ablation_interpretation": "branch reliance, not proof of topology",
+    "message_passing_ablation_scope": "development_validation_posthoc_zero_fixed_message_weights",
+    "directed_rewiring_scope": "biological_coherence_not_predictive_classification",
+    "full_label_permutation_retraining": true,
+    "label_permutation_count": 49,
+    "label_permutation_model_seeds": [1234, 2025],
+    "label_permutation_scope": "posthoc_reviewer_control_not_model_selection"
   }
 }

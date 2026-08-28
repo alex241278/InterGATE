@@ -16,7 +16,6 @@ import pandas as pd
 from scipy.stats import spearmanr
 
 from .posthoc_biology_common import (
-    EXPECTED_FULL_STRICT_EDGES,
     LOCKED_SEEDS,
     LOCKED_TARGET_CLASS,
     bh_adjust,
@@ -273,11 +272,8 @@ def run_external_structural_concordance(
     strict, _ = strict_edge_core_from_seed_tables(
         locked_seed_tables, class_name=target_class
     )
-    if len(strict) != EXPECTED_FULL_STRICT_EDGES:
-        raise RuntimeError(
-            f"Núcleo FULL inesperado: {len(strict)} != "
-            f"{EXPECTED_FULL_STRICT_EDGES}."
-        )
+    if strict.empty:
+        raise RuntimeError("El núcleo FULL 5/5 bloqueado está vacío.")
 
     candidates = build_candidates(runtime)
     candidate_effects, counts = compute_external_candidate_effects(

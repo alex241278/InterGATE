@@ -70,7 +70,7 @@ def consensus_from_seed_tables(seed_root: str | Path, *,
         ):
             raise ValueError(
                 "expected_seed_values debe contener exactamente las cinco "
-                "semillas externas distintas."
+                "semillas outer distintas."
             )
         paths = sorted(
             path

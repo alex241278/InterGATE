@@ -311,6 +311,10 @@ class ImprovedSharedGraphGNN(nn.Module):
         connectivity_min_deg: float = 0.05,
         connectivity_use_abs: bool = True,
 
+        # V8-1. Debe ser explícito: si se absorbe en **unused_kwargs queda
+        # registrado en el manifiesto y no hace nada.
+        use_node_identity: bool = False,
+
         # Para no romper notebooks viejos con args extra:
         **unused_kwargs,
     ):
@@ -383,9 +387,9 @@ class ImprovedSharedGraphGNN(nn.Module):
             )
         else:
             self.register_parameter("edge_logit_delta", None)
-        # Evidencia transcriptómica diferencial V6. Se calcula solo con TRAIN
+        # Evidencia transcriptómica diferencial V8. Se calcula solo con TRAIN
         # de desarrollo y se adjunta después de construir el modelo. Un tensor
-        # vacío mantiene compatibilidad con artefactos que no usan V6.
+        # vacío mantiene compatibilidad con artefactos que no usan V8.
         self.register_buffer(
             "biology_edge_evidence", torch.empty(0, dtype=torch.float32),
             persistent=True,
@@ -425,6 +429,17 @@ class ImprovedSharedGraphGNN(nn.Module):
         self.inp_lin2 = nn.Linear(hidden, hidden)
         self.inp_bn2  = NodeBatchNorm(hidden)
         self.inp_drop = nn.Dropout(dropout)
+
+        # Identidad entrenable de gen. Sin un parámetro indexado por nodo
+        # (inp_lin1 y NodeBatchNorm son compartidos), dos genes con la misma
+        # expresión y un vecindario isomorfo serían indistinguibles. La
+        # inicialización a cero conserva una condición inicial neutra.
+        self.use_node_identity = bool(use_node_identity)
+        if self.use_node_identity:
+            self.node_emb = nn.Embedding(self.num_nodes, hidden)
+            nn.init.zeros_(self.node_emb.weight)
+        else:
+            self.node_emb = None
 
         # ---------- Backbone (GAT) ----------
         self.signed_channels_mode = str(signed_channels_mode)
@@ -1082,6 +1097,13 @@ class ImprovedSharedGraphGNN(nn.Module):
             )
         active_h = active_nodes.view(1, self.num_nodes, 1)
 
+        # V8-P3. El loader de fase 2 entrega [genes_del_grafo | universo
+        # completo]. Este es el unico embudo por el que pasa cualquier entrada
+        # al GNN, incluida la fase 2A graph_only, que llama a forward()
+        # directamente sin pasar por HybridGNNTabular. Se queda con el bloque
+        # del grafo; el resto lo recoge la rama tabular del hibrido.
+        if x_gene.shape[1] > self.num_nodes:
+            x_gene = x_gene[:, : self.num_nodes]
         if x_gene.dim() == 2:
             x_gene = x_gene.unsqueeze(-1)
         x_gene = x_gene * active_h.to(dtype=x_gene.dtype)
@@ -1094,7 +1116,11 @@ class ImprovedSharedGraphGNN(nn.Module):
         h = self.inp_lin2(h)
         h = self.inp_bn2(h)
         h0 = F.relu(h) * active_h.to(dtype=h.dtype)
-    
+        if self.use_node_identity:
+            h0 = h0 + self.node_emb.weight.unsqueeze(0) * active_h.to(
+                dtype=h0.dtype
+            )
+
         hs = [h0]
         h = h0
     
@@ -1229,6 +1255,7 @@ class ImprovedSharedGraphGNN(nn.Module):
             return logits, attn, logits_ao
 
         class_logits = []
+        class_logits_full = []
         class_embeddings = []
         class_attn = []
         aux_logits = []
@@ -1237,6 +1264,8 @@ class ImprovedSharedGraphGNN(nn.Module):
                 x_gene, x_graph, class_id=class_id,
                 return_attn=return_attn,
             )
+            # V8-2: el vector completo de cada experto, no solo la diagonal.
+            class_logits_full.append(logits_all)
             class_logits.append(logits_all[:, class_id])
             class_embeddings.append(z)
             aux_logits.append(logits_ao)
@@ -1244,6 +1273,9 @@ class ImprovedSharedGraphGNN(nn.Module):
                 class_attn.append(attn)
 
         logits = torch.stack(class_logits, dim=1)
+        # (B, n_expertos, n_clases). Lo consume train_one_epoch si
+        # expert_lambda > 0; en inferencia es inerte.
+        self.last_expert_logits = torch.stack(class_logits_full, dim=1)
         self.last_class_embeddings = torch.stack(class_embeddings, dim=1)
         self.last_class_attentions = (
             torch.stack(class_attn, dim=1) if class_attn else None
@@ -1260,6 +1292,9 @@ class ImprovedSharedGraphGNN(nn.Module):
         """Reconstrucción por nodo (para pretraining). Devuelve pred (B,N)."""
         edge_index_sel, edge_w_sel = self._select_edges(x_graph)
 
+        # V8-P3: mismo truncado que en _forward_single_graph.
+        if x_gene.shape[1] > self.num_nodes:
+            x_gene = x_gene[:, : self.num_nodes]
         if x_gene.dim() == 2:
             x_gene = x_gene.unsqueeze(-1)
 
@@ -1346,13 +1381,19 @@ class HybridGNNTabular(nn.Module):
         use_fusion_head: bool = True,
         blend_logits: bool = False,
         blend_init: float = 0.70,
+        tab_hidden: Optional[int] = None,
+        branch_dropout_tab: float = 0.0,
+        branch_dropout_gnn: float = 0.0,
     ):
         super().__init__()
         self.gnn = gnn
         self.is_hybrid = True
 
         self.tab_in_dim = int(tab_in_dim)
-        self.tab_hidden = int(hidden)
+        # Anchura independiente de la rama tabular. Si es None o 0, se usa
+        # `hidden`, preservando las formas esperadas del state_dict.
+        self.gnn_hidden = int(hidden)
+        self.tab_hidden = int(tab_hidden) if tab_hidden else int(hidden)
         self.n_classes = int(n_classes)
         self.tab_layers = int(tab_layers)
         self.tab_dropout = float(tab_dropout)
@@ -1360,6 +1401,12 @@ class HybridGNNTabular(nn.Module):
         self.use_fusion_head = bool(use_fusion_head)
         self.blend_logits = bool(blend_logits)
         self.blend_init = float(blend_init)
+
+        # No se reescala por 1/(1-p): esto simula una rama ausente, no un
+        # dropout ordinario sobre activaciones, y la fusión debe aprender a
+        # operar con el cero literal.
+        self.branch_dropout_tab = float(branch_dropout_tab)
+        self.branch_dropout_gnn = float(branch_dropout_gnn)
 
         self.tab_drop = nn.Dropout(self.tab_dropout)
         self.tab_trunk = _make_mlp(
@@ -1372,7 +1419,9 @@ class HybridGNNTabular(nn.Module):
 
         if self.use_fusion_head:
             self.fusion = nn.Sequential(
-                nn.Linear(2 * self.tab_hidden, self.tab_hidden),
+                # z_gnn mide gnn_hidden y z_tab mide tab_hidden. Cuando son
+                # iguales esto es exactamente 2 * tab_hidden.
+                nn.Linear(self.gnn_hidden + self.tab_hidden, self.tab_hidden),
                 nn.LayerNorm(self.tab_hidden),
                 nn.GELU(),
                 nn.Dropout(self.fusion_dropout),
@@ -1452,6 +1501,16 @@ class HybridGNNTabular(nn.Module):
         return self.gnn.hard_prune_info()
 
     def forward(self, x_gene: torch.Tensor, adj=None, x_graph: Optional[torch.Tensor] = None, return_attn: bool = False):
+        # V8-P3: si x_gene trae mas columnas que nodos tiene el grafo, las
+        # primeras num_nodes son la entrada del GNN y el resto es el universo
+        # genico completo para la rama tabular.
+        n_graph = int(self.gnn.num_nodes)
+        if x_gene.shape[-1] > n_graph:
+            x_tab = x_gene[:, n_graph:]
+            x_gene = x_gene[:, :n_graph]
+        else:
+            x_tab = x_gene
+
         z_holder = {}
         handle = None
 
@@ -1471,7 +1530,18 @@ class HybridGNNTabular(nn.Module):
         if handle is not None:
             handle.remove()
 
-        z_tab = self.tab_trunk(self.tab_drop(x_gene))
+        z_tab = self.tab_trunk(self.tab_drop(x_tab))
+
+        # V8: los logits propios del GNN, que hasta ahora se descartaban.
+        # Los consume train_one_epoch para darle gradiente al grafo sin
+        # pasar por la fusion.
+        self.last_gnn_logits = logits4_gnn
+
+        # V8: dropout de rama por muestra. Solo en entrenamiento.
+        if self.training and self.branch_dropout_tab > 0.0:
+            keep = (torch.rand(z_tab.shape[0], 1, device=z_tab.device)
+                    >= self.branch_dropout_tab).to(z_tab.dtype)
+            z_tab = z_tab * keep
 
         if self.use_fusion_head:
             if self.per_label_graphs:
@@ -1482,15 +1552,29 @@ class HybridGNNTabular(nn.Module):
                     raise RuntimeError(
                         "El GNN por clase no devolvió embeddings de expertos."
                     )
+                if self.training and self.branch_dropout_gnn > 0.0:
+                    keep_g = (
+                        torch.rand(z_classes.shape[0], 1, 1,
+                                   device=z_classes.device)
+                        >= self.branch_dropout_gnn
+                    ).to(z_classes.dtype)
+                    z_classes = z_classes * keep_g
+
                 logits_by_class = []
                 aux_by_class = []
+                expert_logits = []
                 for class_id in range(self.n_classes):
                     z = self.fusion(torch.cat([
                         z_classes[:, class_id, :], z_tab
                     ], dim=-1))
                     logits_all = self.fusion_head4(z)
+                    # La matriz completa de n_clases² logits alimenta la
+                    # supervisión profunda de los expertos; la diagonal
+                    # contiene los cuatro logits de salida.
+                    expert_logits.append(logits_all)
                     logits_by_class.append(logits_all[:, class_id])
                     aux_by_class.append(self.fusion_headAO(z))
+                self.last_expert_logits = torch.stack(expert_logits, dim=1)
                 logits4 = torch.stack(logits_by_class, dim=1)
                 logits_ao = torch.stack(aux_by_class, dim=1).mean(dim=1)
                 return logits4, attn_mean, logits_ao
@@ -1545,6 +1629,13 @@ def build_pruned_model_from(
     fusion_dropout: float = 0.20,
     blend_logits: bool = False,
     blend_init: float = 0.70,
+    # --- Extensiones V8 ---
+    use_node_identity: bool = False,
+    nodes_used_full=None,
+    tab_in_dim: Optional[int] = None,
+    tab_hidden_dim: Optional[int] = None,
+    branch_dropout_tab: float = 0.0,
+    branch_dropout_gnn: float = 0.0,
     **kwargs,
 ):
     """Crea el modelo de Phase 2 con grafo fijo; opcionalmente añade rama tabular híbrida."""
@@ -1585,6 +1676,7 @@ def build_pruned_model_from(
         ),
         per_label_graphs=use_per_label,
         class_names=class_names,
+        use_node_identity=bool(use_node_identity),
         signed_channels_mode=str(getattr(model_gated, "signed_channels_mode", "type_only")),
         use_regulator_pool=bool(getattr(model_gated, "use_regulator_pool", False)),
         regulator_groups=(reg_groups_t if getattr(model_gated, "use_regulator_pool", False) else None),
@@ -1609,6 +1701,27 @@ def build_pruned_model_from(
     new_sd = gnn_pruned.state_dict()
     filtered = {k: v for k, v in old_sd.items() if (k in new_sd and new_sd[k].shape == v.shape)}
     gnn_pruned.load_state_dict(filtered, strict=False)
+
+    # V8-1. El filtro por forma descarta node_emb en silencio: fase 1 tiene
+    # num_nodes completos y fase 2 solo |nodes_used|. Hay que reindexar.
+    if (
+        getattr(model_gated, "node_emb", None) is not None
+        and getattr(gnn_pruned, "node_emb", None) is not None
+    ):
+        if nodes_used_full is None:
+            raise ValueError(
+                "use_node_identity exige nodes_used_full para compactar el "
+                "embedding de gen entre fase 1 y fase 2."
+            )
+        node_idx = torch.as_tensor(
+            np.asarray(nodes_used_full, dtype=np.int64), dtype=torch.long
+        )
+        with torch.no_grad():
+            gnn_pruned.node_emb.weight.copy_(
+                model_gated.node_emb.weight.detach().cpu()[node_idx].to(
+                    gnn_pruned.node_emb.weight.device
+                )
+            )
 
     # Grafo fijo real. Los logits se conservan en el artefacto solo por
     # compatibilidad/provenance; la ruta fija no los usa en el forward.
@@ -1635,7 +1748,8 @@ def build_pruned_model_from(
 
     model_h = HybridGNNTabular(
         gnn=gnn_pruned,
-        tab_in_dim=int(num_nodes),  # X_comp en Phase 2
+        # V8-3: dimensión del universo completo cuando esa rama está activa.
+        tab_in_dim=int(num_nodes if tab_in_dim is None else tab_in_dim),
         hidden=int(hidden),
         n_classes=int(n_classes),
         tab_layers=int(tab_layers),
@@ -1644,5 +1758,8 @@ def build_pruned_model_from(
         use_fusion_head=True,
         blend_logits=bool(blend_logits),
         blend_init=float(blend_init),
+        tab_hidden=tab_hidden_dim,
+        branch_dropout_tab=float(branch_dropout_tab),
+        branch_dropout_gnn=float(branch_dropout_gnn),
     ).to(device)
     return model_h

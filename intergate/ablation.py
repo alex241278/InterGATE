@@ -31,7 +31,10 @@ import pandas as pd
 import torch
 import torch.nn as nn
 
-from .config import CFG
+from .config import (
+    CFG, implementation_fingerprint, model_config_fingerprint,
+    model_config_snapshot,
+)
 from .utils import set_all_seeds, cleanup_memory
 
 
@@ -40,6 +43,36 @@ from .utils import set_all_seeds, cleanup_memory
 # live in CFG.  Call register_runtime(**kw) once from the notebook.
 
 _RT: Dict[str, Any] = {}
+
+
+def _update_content_digest(digest, name: str, values) -> None:
+    """Hash an array-like value without changing its numerical representation."""
+    if torch.is_tensor(values):
+        values = values.detach().cpu().numpy()
+    array = np.asarray(values)
+    digest.update(name.encode("utf-8"))
+    digest.update(b"\0")
+    digest.update(str(array.dtype).encode("ascii", errors="replace"))
+    digest.update(json.dumps(list(array.shape)).encode("ascii"))
+    if array.dtype.kind in {"O", "U", "S"}:
+        digest.update("\x1f".join(map(str, array.reshape(-1))).encode("utf-8"))
+    else:
+        digest.update(np.ascontiguousarray(array).tobytes())
+    digest.update(b"\0")
+
+
+def _refresh_dataset_content_fingerprint() -> None:
+    required = (
+        "Xs_gene", "X_h", "y", "cohort", "train_idx", "val_idx",
+        "test_idx", "genes_kegg", "edge_index_t", "edge_weight_t",
+        "edge_type_t",
+    )
+    if not all(name in _RT for name in required):
+        return
+    digest = hashlib.sha256()
+    for name in required:
+        _update_content_digest(digest, name, _RT[name])
+    _RT["dataset_content_sha256"] = digest.hexdigest()
 
 
 def register_runtime(**kwargs):
@@ -56,6 +89,13 @@ def register_runtime(**kwargs):
         )
     """
     _RT.update(kwargs)
+    fingerprint_inputs = {
+        "Xs_gene", "X_h", "y", "cohort", "train_idx", "val_idx",
+        "test_idx", "genes_kegg", "edge_index_t", "edge_weight_t",
+        "edge_type_t",
+    }
+    if fingerprint_inputs.intersection(kwargs):
+        _refresh_dataset_content_fingerprint()
 
 
 def _rt(name, default=None):
@@ -130,7 +170,7 @@ CFG_FULL = AblationConfig(
     edge_type_gating=True,
     use_signed_prior=True,
     signed_channels_mode=CFG.SIGNED_CHANNELS_MODE,
-    # Se conserva el atributo para compatibilidad de arquitectura; en V6 el
+    # Se conserva el atributo para compatibilidad de arquitectura; en V8 el
     # coeficiente efectivo es exactamente cero y la coherencia es modular.
     connectivity_penalty=True,
     do_pretrain=CFG.DO_PRETRAIN,
@@ -340,12 +380,13 @@ def build_model_from_cfg(cfg: AblationConfig, class_weights_t: Optional[torch.Te
         block_residual=CFG.BLOCK_RESIDUAL,
         use_regulator_pool=(cfg.pool_level == "regulator"),
         regulator_groups=(reg_groups_t if cfg.pool_level == "regulator" else None),
+        use_node_identity=bool(getattr(CFG, "USE_NODE_IDENTITY", False)),
     ).to(CFG.DEVICE)
     biology_evidence = _RT.get("biology_evidence", None)
     if bool(getattr(CFG, "BIOLOGY_FIRST", False)):
         if biology_evidence is None:
             raise RuntimeError(
-                "V6 requiere biology_evidence en el runtime. Use "
+                "V8 requiere biology_evidence en el runtime. Use "
                 "prepare_runtime(..., build_biology_evidence=True)."
             )
         model.set_biology_evidence(biology_evidence)
@@ -733,8 +774,25 @@ def cfg_to_dict(cfg: "AblationConfig") -> dict:
         "HYBRID_BLEND_LOGITS": bool(CFG.HYBRID_BLEND_LOGITS),
         "HYBRID_BLEND_INIT": float(CFG.HYBRID_BLEND_INIT),
         "XGRAPH_DROPOUT": float(CFG.XGRAPH_DROPOUT),
+        "MODEL_VERSION": str(CFG.MODEL_VERSION),
+        "USE_NODE_IDENTITY": bool(CFG.USE_NODE_IDENTITY),
+        "EXPERT_DEEP_SUPERVISION_LAMBDA": float(
+            CFG.EXPERT_DEEP_SUPERVISION_LAMBDA
+        ),
+        "TAB_FULL_GENE_UNIVERSE": bool(CFG.TAB_FULL_GENE_UNIVERSE),
+        "HYBRID_TAB_HIDDEN": int(CFG.HYBRID_TAB_HIDDEN),
+        "BRANCH_DROPOUT_TAB": float(CFG.BRANCH_DROPOUT_TAB),
+        "BRANCH_DROPOUT_GNN": float(CFG.BRANCH_DROPOUT_GNN),
+        "GNN_AUX_LOSS_LAMBDA": float(CFG.GNN_AUX_LOSS_LAMBDA),
+        "BIOLOGY_MATCHED_NULL_DRAWS": int(CFG.BIOLOGY_MATCHED_NULL_DRAWS),
+        "BIOLOGY_REWIRING_NULL_DRAWS": int(
+            CFG.BIOLOGY_REWIRING_NULL_DRAWS
+        ),
         "DEVICE": str(CFG.DEVICE),
     }
+    d["model_config"] = model_config_snapshot(CFG)
+    d["model_config_sha256"] = model_config_fingerprint(CFG)
+    d["implementation_sha256"] = implementation_fingerprint()
 
     # Splits
     train_idx = _RT.get("train_idx", None)
@@ -749,11 +807,30 @@ def cfg_to_dict(cfg: "AblationConfig") -> dict:
     # Firma del dataset
     try:
         X_full, genes_full = get_full_gene_matrix_and_genes()
-        sig = hashlib.md5(("|".join(map(str, genes_full))).encode("utf-8")).hexdigest()
+        y_full = np.asarray(_RT.get("y", []), dtype=np.int64)
+        cohort_full = np.asarray(_RT.get("cohort", [])).astype(str)
+
+        def _sha256_text(values) -> str:
+            return hashlib.sha256(
+                "\x1f".join(map(str, values)).encode("utf-8")
+            ).hexdigest()
+
+        def _sha256_int(values) -> str:
+            array = np.ascontiguousarray(
+                np.asarray(values, dtype=np.int64)
+            )
+            return hashlib.sha256(array.tobytes()).hexdigest()
+
         d["dataset_signature"] = {
             "n_samples": int(X_full.shape[0]),
             "n_genes_full": int(X_full.shape[1]),
-            "genes_md5": sig,
+            "genes_sha256": _sha256_text(genes_full),
+            "labels_sha256": _sha256_int(y_full),
+            "cohorts_sha256": _sha256_text(cohort_full),
+            "train_idx_sha256": _sha256_int(_RT.get("train_idx", [])),
+            "val_idx_sha256": _sha256_int(_RT.get("val_idx", [])),
+            "test_idx_sha256": _sha256_int(_RT.get("test_idx", [])),
+            "content_sha256": str(_RT.get("dataset_content_sha256", "")),
         }
     except Exception:
         d["dataset_signature"] = None
@@ -1027,6 +1104,23 @@ def save_bundle(
         "fusion_dropout": float(getattr(model_pruned, "fusion_dropout", 0.20)),
         "blend_logits": bool(getattr(model_pruned, "blend_logits", False)),
         "blend_init": float(getattr(model_pruned, "blend_init", 0.70)),
+        "use_node_identity": bool(
+            getattr(core_model, "use_node_identity", False)
+        ),
+        "tab_in_dim": int(getattr(model_pruned, "tab_in_dim", 0)),
+        "tab_hidden": int(getattr(model_pruned, "tab_hidden", 0)),
+        "branch_dropout_tab": float(
+            getattr(model_pruned, "branch_dropout_tab", 0.0)
+        ),
+        "branch_dropout_gnn": float(
+            getattr(model_pruned, "branch_dropout_gnn", 0.0)
+        ),
+        "gnn_aux_loss_lambda": float(
+            getattr(CFG, "GNN_AUX_LOSS_LAMBDA", 0.0)
+        ),
+        "tab_full_gene_universe": bool(
+            getattr(CFG, "TAB_FULL_GENE_UNIVERSE", False)
+        ),
         "per_label_graphs": bool(
             getattr(core_model, "per_label_graphs", False)
         ),
@@ -1227,6 +1321,7 @@ def build_pruned_model_from_bundle(bundle: dict, device=None):
         xgraph_dropout=float(meta["globals"].get("XGRAPH_DROPOUT", CFG.XGRAPH_DROPOUT)),
         block_use_self=bool(meta["globals"].get("BLOCK_USE_SELF", CFG.BLOCK_USE_SELF)),
         block_residual=bool(meta["globals"].get("BLOCK_RESIDUAL", CFG.BLOCK_RESIDUAL)),
+        use_node_identity=bool(flags.get("use_node_identity", False)),
     ).to(device)
 
     if per_label_graphs:
@@ -1242,7 +1337,14 @@ def build_pruned_model_from_bundle(bundle: dict, device=None):
 
     if is_hybrid:
         model_p = HybridGNNTabular(
-            gnn=base, tab_in_dim=num_nodes, hidden=hidden, n_classes=n_classes,
+            gnn=base,
+            # V8-P3: si el bundle se entreno con el universo completo, la rama
+            # tabular tiene 7.131 entradas y no |nodes_used|. Sin esto,
+            # load_state_dict(strict=False) descartaria la rama entera en
+            # silencio y se estaria evaluando V8.
+            tab_in_dim=int(flags.get("tab_in_dim", 0) or num_nodes),
+            hidden=hidden, n_classes=n_classes,
+            tab_hidden=int(flags.get("tab_hidden", 0)) or None,
             tab_layers=int(flags.get("tab_layers", 2)),
             tab_dropout=float(flags.get("tab_dropout", 0.20)),
             fusion_dropout=float(flags.get("fusion_dropout", 0.20)),
@@ -1317,7 +1419,16 @@ def _predict_bundle_on_indices(
         raise RuntimeError(
             "El orden/universo de genes actual no coincide con el bundle congelado."
         )
-    X_comp = X_full[:, nodes_used]
+    # V8-3. Debe coincidir exactamente con transport.py o la inferencia lee
+    # columnas distintas de las del entrenamiento sin lanzar ningún error.
+    X_comp = (
+        np.hstack([X_full[:, nodes_used], X_full]).astype(np.float32)
+        if bool(bundle.get("model", {}).get("model_flags", {}).get(
+            "tab_full_gene_universe",
+            getattr(CFG, "TAB_FULL_GENE_UNIVERSE", False),
+        ))
+        else X_full[:, nodes_used]
+    )
     X_h = _rt("X_h")
     y = _rt("y")
 
@@ -1373,7 +1484,7 @@ def predict_bundle_on_test(bundle_dir: str, device=None) -> dict:
     if test_idx.size == 0:
         raise RuntimeError(
             "El test externo sigue bloqueado. Ejecuta prepare_runtime("
-            "include_external=True) exclusivamente en notebook 07."
+            "include_external=True) para la evaluación predictiva del notebook 07."
         )
     prediction = _predict_bundle_on_indices(
         bundle_dir, test_idx, device=device
@@ -2073,8 +2184,7 @@ def run_single_seed_phase1_only(
     El checkpoint se selecciona solo con validación. Después de restaurarlo se
     recalcula el TopK objetivo, porque la máscara dura es estado Python y no
     forma parte de ``state_dict``. Por defecto informa solo validación de
-    desarrollo; el test externo permanece bloqueado hasta el paso 07, una vez
-    verificado el cierre del protocolo.
+    desarrollo; el test externo permanece bloqueado hasta el notebook final.
     """
     if bool(cfg.do_stability):
         raise ValueError(
