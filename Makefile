@@ -25,3 +25,4 @@ test:
 	$(PYTHON) tests/check_notebook_contract.py
 	$(PYTHON) tests/test_protocol_alignment.py
 	$(PYTHON) tests/test_current_synthetic.py
+	$(PYTHON) tests/test_xgboost_biology_contrast.py

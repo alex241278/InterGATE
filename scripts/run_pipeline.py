@@ -59,16 +59,16 @@ ANALYSIS_STEPS = (
         ROOT / "notebooks/08b_concordancia_estructural_externa.ipynb",
         ROOT / "results_v8/08b_external_structural_concordance/external_structural_concordance_manifest.json",
     ),
+    NotebookStep(
+        "08c",
+        ROOT / "notebooks/08c_xgboost_vs_intergate_biology.ipynb",
+        ROOT / "results_v8/08c_xgboost_intergate_biology/analysis_manifest.json",
+    ),
     NotebookStep("09", ROOT / "notebooks/09_ablaciones_biologia_score_0075.ipynb"),
     NotebookStep("12", ROOT / "notebooks/12_controles_revision_q_permutaciones.ipynb"),
     NotebookStep("10", ROOT / "notebooks/10_figuras_definitivas.ipynb"),
     NotebookStep("13", ROOT / "notebooks/13_generate_supplementary_figures_S2_S3.ipynb"),
 )
-
-OPTIONAL_STEPS = (
-    NotebookStep("08c", ROOT / "notebooks/08c_xgboost_vs_intergate_biology.ipynb"),
-)
-
 
 def _slice_steps(
     steps: tuple[NotebookStep, ...], first: str | None, last: str | None
@@ -148,9 +148,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Run the audited InterGATE data and analysis notebooks."
     )
-    parser.add_argument(
-        "stage", choices=("data", "analysis", "optional", "all", "list")
-    )
+    parser.add_argument("stage", choices=("data", "analysis", "all", "list"))
     valid_steps = (
         "00", "00a", "00b", "01", "02", "03", "04", "05", "06",
         "07", "07b", "08a", "08b", "08c", "09", "10", "12", "13",
@@ -175,7 +173,6 @@ def main() -> int:
         for name, steps in (
             ("data", DATA_STEPS),
             ("analysis", ANALYSIS_STEPS),
-            ("optional", OPTIONAL_STEPS),
         ):
             print(f"{name}:")
             for step in steps:
@@ -211,16 +208,6 @@ def main() -> int:
                 include_label_permutations=args.include_label_permutations,
             )
 
-        if args.stage == "optional":
-            if not args.skip_preflight and not args.dry_run:
-                _preflight("analysis")
-            selected = _slice_steps(
-                OPTIONAL_STEPS, args.from_step, args.through_step
-            )
-            _execute(
-                "optional", selected, kernel=args.kernel, dry_run=args.dry_run,
-                include_label_permutations=False,
-            )
     except ValueError as exc:
         parser.error(str(exc))
     return 0

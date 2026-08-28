@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
 from pathlib import Path
 
@@ -129,6 +130,7 @@ def main() -> None:
         "2.31",
         "0.838",
         "0.963",
+        "7 vs 1",
     ):
         assert required in aligned_text, required
     for stale in (
@@ -145,6 +147,21 @@ def main() -> None:
 
     assert not (ROOT / "configs/protocol_v6.json").exists()
     assert not (ROOT / "notebooks/10_figuras_definitivas_v2.ipynb").exists()
+
+    xgb_protocol = json.loads(
+        (ROOT / "protocols/xgboost_intergate_biology_locked_v1.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert xgb_protocol["protocol_id"] == "xgb-intergate-basal-biology-locked-v1"
+    assert xgb_protocol["analysis_role"] == "posthoc_secondary_biological_comparison"
+    assert xgb_protocol["development_ranking"]["size_matched_panel"] == 288
+    assert xgb_protocol["xgboost_refit"] is False
+    core_path = ROOT / xgb_protocol["intergate_panel"]["locked_file"]
+    assert core_path.is_file()
+    assert hashlib.sha256(core_path.read_bytes()).hexdigest() == (
+        xgb_protocol["intergate_panel"]["locked_file_sha256"]
+    )
     print("Protocol/manuscript/graphic alignment: OK")
 
 

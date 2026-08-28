@@ -10,7 +10,6 @@
       .metric{font-size:17px;font-weight:700}.small{font-size:14px}.tiny{font-size:12px}.label{font-size:16px;font-weight:700}.boxlabel{font-size:14px}.gene{font-size:17px;font-weight:700}
       .rule{stroke-width:1.5}.network{stroke:#666;stroke-width:1.4}.activation{stroke:#19a528;stroke-width:2}.inhibition{stroke:#e32222;stroke-width:2}
     </style>
-    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-opacity="0.16"/></filter>
     <marker id="arrow-navy" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="#071b58"/></marker>
     <marker id="arrow-green" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#19a528"/></marker>
     <marker id="bar-red" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="none" stroke="#e32222" stroke-width="1.8"/></marker>
@@ -22,16 +21,16 @@
     </symbol>
   </defs>
 
-  <rect width="1536" height="1024" fill="#fafafa"/>
+  <rect width="1536" height="1024" fill="#f5f7fa"/>
   <text x="768" y="82" text-anchor="middle" class="sans navy h1">InterGATE</text>
   <text x="768" y="117" text-anchor="middle" class="cond navy subtitle">Reproducible Basal-like interaction recovery across breast cancer cohorts</text>
 
   <!-- Panel containers -->
-  <g filter="url(#soft)">
-    <rect x="18" y="132" width="354" height="744" rx="17" fill="#fff" stroke="#0649d8" stroke-width="2"/>
-    <rect x="394" y="132" width="345" height="744" rx="17" fill="#fff" stroke="#008a99" stroke-width="2"/>
-    <rect x="762" y="132" width="354" height="744" rx="17" fill="#fff" stroke="#5c2483" stroke-width="4"/>
-    <rect x="1139" y="132" width="379" height="744" rx="17" fill="#fff" stroke="#ea4b00" stroke-width="2"/>
+  <g>
+    <rect x="18" y="132" width="354" height="744" rx="17" fill="#f4f7ff" stroke="#0649d8" stroke-width="3.2"/>
+    <rect x="394" y="132" width="345" height="744" rx="17" fill="#f1fbfc" stroke="#008a99" stroke-width="3.2"/>
+    <rect x="762" y="132" width="354" height="744" rx="17" fill="#faf5fc" stroke="#5c2483" stroke-width="4"/>
+    <rect x="1139" y="132" width="379" height="744" rx="17" fill="#fff7f1" stroke="#ea4b00" stroke-width="3.2"/>
   </g>
   <path d="M18 149q0-17 17-17h320q17 0 17 17v34H18z" fill="#0649d8"/>
   <path d="M394 149q0-17 17-17h311q17 0 17 17v34H394z" fill="#008a99"/>
@@ -51,9 +50,9 @@
 
   <!-- Panel 1 -->
   <g class="cond body">
-    <text x="195" y="210" text-anchor="middle" class="metric" font-size="15">Development: 3,713 tumours | 4 cohorts</text>
-    <text x="195" y="239" text-anchor="middle" class="metric" font-size="15">External: 1,143 tumours | 3 cohorts</text>
-    <text x="195" y="268" text-anchor="middle" class="metric" font-size="15">7,131 genes | 52,878 directed units</text>
+    <text x="195" y="210" text-anchor="middle" class="metric" style="font-size:14.5px">Development: 3,713 tumours | 4 cohorts</text>
+    <text x="195" y="239" text-anchor="middle" class="metric" style="font-size:14.5px">External: 1,143 tumours | 3 cohorts</text>
+    <text x="195" y="268" text-anchor="middle" class="metric" style="font-size:14.5px">7,131 genes | 52,878 directed units</text>
     <line x1="39" y1="282" x2="351" y2="282" stroke="#0649d8" class="rule"/>
     <text x="195" y="307" text-anchor="middle" class="blue label">EXPRESSION CLASSES</text>
     <g transform="translate(47 325)" color="#1769d2"><use xlink:href="#person" x="0" width="30" height="46"/><use xlink:href="#person" x="18" y="-7" width="30" height="46"/><use xlink:href="#person" x="36" width="30" height="46"/></g>
@@ -136,10 +135,10 @@
 
   <!-- Panel 4 -->
   <g class="cond body">
-    <text x="1329" y="204" text-anchor="middle" class="metric" font-size="15">Candidate-matched recovery</text>
-    <text x="1329" y="225" text-anchor="middle" class="metric" font-size="15">global FDR = 0.0096</text>
-    <text x="1329" y="247" text-anchor="middle" class="metric" font-size="14">External fixed-edge concordance: ρ = 0.691</text>
-    <text x="1329" y="269" text-anchor="middle" class="metric" font-size="15">Direction agreement: 82.9%</text>
+    <text x="1329" y="204" text-anchor="middle" class="metric" style="font-size:14.5px">Candidate-matched recovery</text>
+    <text x="1329" y="225" text-anchor="middle" class="metric" style="font-size:14.5px">global FDR = 0.0096</text>
+    <text x="1329" y="247" text-anchor="middle" class="metric" style="font-size:13.2px">External fixed-edge concordance: ρ = 0.691</text>
+    <text x="1329" y="269" text-anchor="middle" class="metric" style="font-size:14.5px">Direction agreement: 82.9%</text>
     <text x="1329" y="299" text-anchor="middle" class="red label">OBSERVED vs MATCHED NULL</text>
     <g class="tiny"><rect x="1377" y="314" width="18" height="14" fill="#ea4b00"/><text x="1403" y="326">Observed</text><rect x="1377" y="336" width="18" height="14" fill="#c8c8c8"/><text x="1403" y="348">Matched null</text></g>
     <line x1="1164" y1="457" x2="1493" y2="457" stroke="#111" stroke-width="1.5"/>
@@ -147,7 +146,7 @@
     <g class="label"><text x="1212" y="351" text-anchor="middle">2.22×</text><text x="1335" y="407" text-anchor="middle">5.94×</text><text x="1456" y="396" text-anchor="middle">2.31×</text></g>
     <g class="small"><text x="1212" y="479" text-anchor="middle">≥1 endpoint</text><text x="1335" y="479" text-anchor="middle">Both endpoints</text><text x="1456" y="479" text-anchor="middle">Unique nodes</text></g>
     <line x1="1156" y1="507" x2="1501" y2="507" stroke="#ea4b00" class="rule"/>
-    <text x="1329" y="531" text-anchor="middle" class="red label" font-size="13">DEVELOPMENT vs EXTERNAL CONCORDANCE</text>
+    <text x="1329" y="531" text-anchor="middle" class="red label" style="font-size:12.5px">DEVELOPMENT–EXTERNAL CONCORDANCE</text>
     <line x1="1206" y1="629" x2="1470" y2="629" stroke="#111" stroke-width="1.3"/><line x1="1206" y1="629" x2="1206" y2="548" stroke="#111" stroke-width="1.3"/>
     <line x1="1206" y1="629" x2="1470" y2="548" stroke="#777" stroke-width="1.3" stroke-dasharray="5 4"/>
     <g fill="#ea4b00"><circle cx="1234" cy="600" r="4"/><circle cx="1268" cy="589" r="4"/><circle cx="1289" cy="579" r="4"/><circle cx="1313" cy="574" r="4"/><circle cx="1331" cy="563" r="4"/><circle cx="1354" cy="580" r="4"/><circle cx="1374" cy="553" r="4"/><circle cx="1397" cy="570" r="4"/><circle cx="1420" cy="542" r="4"/><circle cx="1442" cy="557" r="4"/><circle cx="1460" cy="538" r="4"/></g>
@@ -157,13 +156,14 @@
     <text x="1329" y="724" text-anchor="middle" class="small">G2/M • E2F • PI3K–AKT–mTOR • Notch • WNT • MYC</text>
     <g fill="none" stroke-width="2"><circle cx="1190" cy="766" r="24" stroke="#0649d8"/><circle cx="1246" cy="766" r="24" stroke="#d60a08"/><circle cx="1302" cy="766" r="24" stroke="#19a528"/><circle cx="1358" cy="766" r="24" stroke="#5c2483"/><circle cx="1414" cy="766" r="24" stroke="#ea4b00"/><circle cx="1470" cy="766" r="24" stroke="#008a99"/></g>
     <g class="tiny" text-anchor="middle"><text x="1190" y="771">G2/M</text><text x="1246" y="771">E2F</text><text x="1302" y="765">PI3K/</text><text x="1302" y="778">mTOR</text><text x="1358" y="771">Notch</text><text x="1414" y="771">WNT</text><text x="1470" y="771">MYC</text></g>
-    <rect x="1170" y="807" width="318" height="54" rx="10" fill="#fff8f1" stroke="#ea4b00"/>
-    <text x="1329" y="829" text-anchor="middle" class="metric" font-size="14" font-style="italic">External prediction (secondary)</text>
-    <text x="1329" y="851" text-anchor="middle" class="small">macro-F1 = 0.838 | Basal-like F1 = 0.963</text>
+    <rect x="1170" y="799" width="318" height="31" rx="9" fill="#e9f7f5" stroke="#008a99" stroke-width="1.4"/>
+    <text x="1329" y="820" text-anchor="middle" class="metric" style="font-size:11.5px">Prespecified programmes: 7 vs 1 (XGBoost)</text>
+    <rect x="1170" y="837" width="318" height="30" rx="9" fill="#fff1e7" stroke="#ea4b00" stroke-width="1.4"/>
+    <text x="1329" y="857" text-anchor="middle" class="small" style="font-size:10.4px">External prediction: macro-F1 0.838 | Basal-like F1 0.963</text>
   </g>
 
   <!-- Bottom statement -->
-  <rect x="82" y="901" width="1366" height="105" rx="16" fill="#fff" stroke="#0649d8" stroke-width="2"/>
+  <rect x="82" y="901" width="1366" height="105" rx="16" fill="#fff" stroke="#0649d8" stroke-width="3"/>
   <circle cx="136" cy="953" r="35" fill="none" stroke="#071b58" stroke-width="8"/><circle cx="136" cy="953" r="21" fill="none" stroke="#071b58" stroke-width="7"/><circle cx="136" cy="953" r="7" fill="#071b58"/><path d="M136 953l44-44M164 909h16v16" fill="none" stroke="#071b58" stroke-width="7"/>
   <text x="807" y="946" text-anchor="middle" class="cond navy" font-size="29" font-weight="800">Prior-bounded, reproducible and externally concordant Basal-like interaction</text>
   <text x="807" y="989" text-anchor="middle" class="cond navy" font-size="29" font-weight="800">hypotheses for experimental follow-up.</text>

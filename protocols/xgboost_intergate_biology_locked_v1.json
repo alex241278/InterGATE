@@ -1,0 +1,90 @@
+{
+  "protocol_id": "xgb-intergate-basal-biology-locked-v1",
+  "status": "locked_before_feature_attribution",
+  "analysis_role": "posthoc_secondary_biological_comparison",
+  "common_estimand": "Basal-like gene and biological-programme recovery",
+  "not_a_common_estimand": "molecular-edge recovery because XGBoost does not infer a molecular graph",
+  "models": {
+    "xgboost": "five immutable classifiers from 08a_paired_predictive_benchmark",
+    "intergate": "Basal-like strict 5-of-5 gene core"
+  },
+  "classes": [
+    "LumA",
+    "LumB",
+    "HER2-enriched",
+    "Basal-like"
+  ],
+  "seeds": [
+    1234,
+    2025,
+    7,
+    99,
+    31337
+  ],
+  "feature_universe": {
+    "n_genes": 7131,
+    "order": "identical to the paired predictive benchmark"
+  },
+  "development_ranking": {
+    "split": "fixed development validation",
+    "method": "exact TreeSHAP on the XGBoost Basal-like margin",
+    "signed_score": "mean contribution in Basal-like samples minus mean contribution in the remaining classes",
+    "cohort_aggregation": "within each seed, ascending mean rank with equal weight for each of the four development cohorts",
+    "seed_aggregation": "ascending mean of the five cohort-balanced seed ranks",
+    "tie_breakers": [
+      "descending mean signed contrast",
+      "ascending gene symbol"
+    ],
+    "size_matched_panel": 288,
+    "strict_panel_secondary": "intersection of the five seed-specific top-288 panels"
+  },
+  "intergate_panel": {
+    "class": "Basal-like",
+    "definition": "genes incident to the 299 directed edges recovered in five of five runs",
+    "locked_file": "protocols/intergate_basal_strict_5of5_288_genes.csv",
+    "locked_file_sha256": "df08f34e8af9f1917b25dad02676ce69bc48c29811b94a543c63e3c70f669f2a",
+    "expected_size": 288
+  },
+  "annotations": {
+    "msigdb_release": "read from the locked notebook-05 manifest",
+    "collections": [
+      "Hallmark",
+      "C2:CGP"
+    ],
+    "class_signatures": "the four directionally aligned locked signatures from notebook 05",
+    "pam50_removed_from_primary_class_signatures": true,
+    "ora_universe": "the same ordered 7131 genes"
+  },
+  "common_matched_null": {
+    "draws": 1000,
+    "sampling": "without replacement",
+    "matching_covariates": [
+      "development-training expression mean",
+      "development-training expression standard deviation",
+      "between-development-cohort mean-expression standard deviation",
+      "log1p candidate-prior degree"
+    ]
+  },
+  "primary_outputs": [
+    "Basal-like locked-signature overlap and fold enrichment",
+    "covariate-matched InterGATE-minus-XGBoost Basal-like signature contrast",
+    "Basal-like specificity relative to the other three locked signatures",
+    "prespecified Basal-like Hallmark/C2 programme recovery"
+  ],
+  "secondary_outputs": [
+    "InterGATE-XGBoost gene overlap",
+    "XGBoost top-288 stability across seeds",
+    "external cohort rank and sign concordance of the development-locked XGBoost panel"
+  ],
+  "external_contract": {
+    "used_for_ranking": false,
+    "used_for_model_refitting": false,
+    "used_only_after_development_lock": true
+  },
+  "xgboost_refit": false,
+  "references": [
+    "Lundberg SM et al. Nat Mach Intell. 2020;2:56-67. doi:10.1038/s42256-019-0138-9",
+    "Subramanian A et al. Proc Natl Acad Sci USA. 2005;102:15545-15550. doi:10.1073/pnas.0506580102",
+    "Liberzon A et al. Cell Syst. 2015;1:417-425. doi:10.1016/j.cels.2015.12.004"
+  ]
+}

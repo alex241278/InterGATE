@@ -3,7 +3,7 @@
 Audit date: 2026-08-28
 
 This audit reconciles the source repository with the current manuscript,
-supplementary methods, Supplementary Data 1 and 2, and the publication
+supplementary methods, Supplementary Data 1--3, and the publication
 graphical abstract.
 
 ## Scientific contract
@@ -38,17 +38,25 @@ The implementation-to-method mapping is detailed in
 | External ensemble macro-F1 | 0.838 | 0.838 |
 | External Basal-like F1 | 0.963 | 0.963 |
 | Temperature / external ECE | 1.17394; 0.0652 to 0.0466 | Same |
+| Basal signature recovery, InterGATE / XGBoost | 71 / 63 genes; matched folds 2.787 / 1.886 | Same |
+| Prespecified Basal-like programmes, InterGATE / XGBoost | 7 / 1 | Same |
+| Basal specificity margin, InterGATE / XGBoost | +1.325 / −1.180 | Same |
+| Direct panel contrast | one-sided \(P=0.01399\); BH FDR 0.05594 | Same |
+| Frozen-XGBoost external attribution | Spearman 0.9897; sign agreement 0.9888 | Same |
 
 Supplementary Data 1 was checked directly: 299 unique edge rows, 288 unique
 genes, 75 weak components, and a 199/67/33 prior-provenance split.
 Supplementary Data 2 was checked directly for ensemble, class-specific,
 paired-comparator, and calibration values.
+Supplementary Data 3 was checked directly for the frozen-model audit,
+size-matched gene panels, common matched-null recovery, specificity,
+prespecified programmes, and external attribution transportability.
 
 ## Reproducibility corrections included in this update
 
 - Replaced the legacy protocol and notebook set with the current canonical
   workflow, including calibration, fixed-edge external concordance, atomic
-  biological ablations, sensitivity controls, and the optional XGBoost
+  biological ablations, sensitivity controls, and the secondary XGBoost
   biological comparison.
 - Removed tracked notebook outputs, execution counts, absolute paths, caches,
   checkpoints, and duplicate historical figure notebooks.
@@ -58,6 +66,8 @@ paired-comparator, and calibration values.
   two optimizer updates per episode, plus 128 support observations per step.
 - Added a dependency-aware runner, preflight checks, static protocol guards,
   synthetic train-only-evidence tests, and continuous integration.
+- Made the direct matched-null panel contrast tie-safe by computing empirical
+  statistics from integer overlap-count differences before scaling.
 - Rebuilt the graphical abstract as editable SVG, PDF, and PNG using the
   current architecture and manuscript values.
 
@@ -66,14 +76,15 @@ paired-comparator, and calibration values.
 ```text
 Python source compilation:                 PASS
 Internal module import inventory:          PASS (no missing modules)
-Notebook JSON and source compilation:      PASS (23 notebooks, 185 code cells)
+Notebook JSON and source compilation:      PASS (23 notebooks, 292 cells / 185 code cells)
 Notebook cleanliness and portable paths:   PASS
 Protocol/config/document/graphic contract: PASS
 Synthetic train-only evidence invariance:  PASS
 Candidate-matched null synthetic check:    PASS
+Tie-safe XGBoost panel contrast check:      PASS
 Pipeline dependency-order dry run:         PASS
-Main-manuscript LaTeX build:               PASS (24 pages)
-Supplementary-file LaTeX build:            PASS (10 pages)
+Main-manuscript LaTeX build:               PASS (25 pages)
+Supplementary-file LaTeX build:            PASS (11 pages)
 PDF visual inspection:                     PASS
 ```
 

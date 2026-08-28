@@ -27,6 +27,12 @@ generalize across the three external cohorts (meta-analytic Spearman
 \(\rho=0.691\); directional agreement 82.9%). The external five-model ensemble
 achieves macro-F1 **0.838** and Basal-like F1 **0.963**.
 
+In a size-matched secondary comparison, the InterGATE strict core recovered
+all **7** prespecified Basal-like programmes, whereas a 288-gene panel ranked
+from five frozen XGBoost TreeSHAP models recovered **1**. The comparison
+separates biological recovery from predictive discrimination: XGBoost retained
+the higher external macro-F1 in the paired predictive benchmark.
+
 The repository reproduces the complete analysis: public-data acquisition,
 audited endpoint construction, reference M-ComBat, structural meta-learning,
 fixed-graph hybrid classification, multiseed recovery, candidate-matched and
@@ -119,14 +125,16 @@ tables are available even when their historical numeric prefixes are lower.
 | 9 | `07b_calibracion_posthoc.ipynb` | Development-fitted temperature calibration |
 | 10 | `08a_benchmark_tabular_pareado_S12.ipynb` | Paired elastic-net, random-forest, and XGBoost benchmark |
 | 11 | `08b_concordancia_estructural_externa.ipynb` | Fixed-edge external structural concordance |
-| 12 | `09_ablaciones_biologia_score_0075.ipynb` | Definitive-score biological analysis of trained ablations |
-| 13 | `12_controles_revision_q_permutaciones.ipynb` | Score/selector factorial, edge-budget sensitivity, and optional label permutations |
-| 14 | `10_figuras_definitivas.ipynb` | Main figures and complete-core supplementary network |
-| 15 | `13_generate_supplementary_figures_S2_S3.ipynb` | Supplementary sensitivity figures |
+| 12 | `08c_xgboost_vs_intergate_biology.ipynb` | Size-matched Basal-like gene and programme recovery from frozen XGBoost attribution versus the InterGATE strict core |
+| 13 | `09_ablaciones_biologia_score_0075.ipynb` | Definitive-score biological analysis of trained ablations |
+| 14 | `12_controles_revision_q_permutaciones.ipynb` | Score/selector factorial, edge-budget sensitivity, and optional label permutations |
+| 15 | `10_figuras_definitivas.ipynb` | Main figures and complete-core supplementary network |
+| 16 | `13_generate_supplementary_figures_S2_S3.ipynb` | Supplementary sensitivity figures |
 
-`08c_xgboost_vs_intergate_biology.ipynb` is a separate, optional secondary
-analysis comparing gene-program recovery from the frozen XGBoost models and
-the InterGATE strict core. It does not alter any manuscript result or model.
+Notebook 08c is a prespecified secondary manuscript analysis. It reuses the
+five frozen XGBoost models, locks a development-only TreeSHAP gene panel, and
+compares size-matched gene and programme recovery without changing any fitted
+model or the paired predictive benchmark.
 
 The 49 full-retraining label permutations are intentionally opt-in because
 they are computationally expensive. Run them with:

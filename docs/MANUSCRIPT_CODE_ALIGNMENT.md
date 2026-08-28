@@ -2,7 +2,7 @@
 
 This crosswalk maps the current manuscript claims to executable code,
 machine-readable settings, and result-producing notebooks. It was checked
-against the main text, supplementary methods, Supplementary Data 1 and 2, and
+against the main text, supplementary methods, Supplementary Data 1--3, and
 the source package supplied for this repository update.
 
 | Manuscript item | Implementation | Executable source | Alignment |
@@ -29,6 +29,8 @@ the source package supplied for this repository update.
 | Development-fitted calibration | Temperature is fitted to development-validation probabilities and applied unchanged to saved external predictions | `intergate/calibration.py`; notebook 07b | Exact |
 | Paired tabular benchmark | Same ordered 7,131 genes, samples, split, and five seeds; frozen models applied to external cohorts | `intergate/predictive_benchmark.py`; notebook 08a | Exact |
 | Fixed-edge external concordance | The 299 locked core edges are evaluated without refitting; null panels exclude selected edges and match type/sign/degrees | `intergate/posthoc_external_concordance.py`; notebook 08b | Exact |
+| Size-matched XGBoost biological comparison | Five frozen XGBoost models and their hashes; exact TreeSHAP on development validation; equal cohort weighting; a locked 288-gene panel; common matched null; external transportability only after the development lock | `intergate/xgboost_intergate_biology.py`; `protocols/xgboost_intergate_biology_locked_v1.json`; notebook 08c | Exact |
+| Tie-safe empirical panel contrast | Null statistics and the observed statistic are computed from integer overlap-count differences before scaling, so exact empirical ties are included | `intergate/xgboost_intergate_biology.py`; `tests/test_xgboost_biology_contrast.py` | Exact |
 | Factorial and \(k/R\) sensitivity | Score source × selector control and \(\kappa\in\{0.007,0.010,0.015,0.020\}\) | notebook 12; notebook 13 | Exact |
 | Final quantitative figures | Figure code reads current result tables, verifies both result manifests against the active cryptographic protocol lock, and validates expected manuscript inputs before export | `intergate/final_figures.py`; notebooks 10 and 13 | Exact |
 
@@ -43,15 +45,20 @@ the source package supplied for this repository update.
 | External meta-Spearman 0.691; direction agreement 82.9% | fixed-edge concordance tables | Consistent |
 | External ensemble macro-F1 0.838; Basal-like F1 0.963 | Supplementary Data 2 and manuscript table | Consistent |
 | Temperature 1.17394; ECE 0.0652→0.0466 | calibration tables in Supplementary Data 2 | Consistent |
+| Basal signature recovery: 71 versus 63 genes; matched-null folds 2.787 versus 1.886; both FDR 0.004 | Supplementary Data 3 and notebook-08c result tables | Consistent |
+| Prespecified Basal-like programmes: 7 for InterGATE versus 1 for XGBoost | Supplementary Data 3 and notebook-08c programme table | Consistent |
+| Basal specificity margin: +1.325 versus −1.180 | Supplementary Data 3 and notebook-08c specificity table | Consistent |
+| Direct InterGATE-minus-XGBoost contrast: one-sided \(P=0.01399\), BH FDR 0.05594 | tie-safe integer-count empirical audit | Consistent |
+| Frozen-XGBoost external attribution: pooled top-panel Spearman 0.9897 and sign agreement 0.9888 | Supplementary Data 3 external transportability table | Consistent |
 
-## Deliberately separate analyses
+## Secondary and extended analyses
 
 - The 49 full-retraining label permutations are an extended reviewer control
   and are opt-in in the runner. They are not used to select the model or any
   reported network.
-- The XGBoost–InterGATE gene-program comparison is an optional secondary
+- The XGBoost–InterGATE gene-program comparison is a secondary manuscript
   analysis. It reuses frozen XGBoost models, does not infer an XGBoost edge
-  network, and does not alter the manuscript's paired predictive benchmark.
+  network, and does not alter the paired predictive benchmark.
 
 ## Methodological references
 

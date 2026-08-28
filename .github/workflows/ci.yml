@@ -23,3 +23,5 @@ jobs:
         run: python tests/test_protocol_alignment.py
       - name: Run synthetic invariance checks
         run: python tests/test_current_synthetic.py
+      - name: Check tie-safe XGBoost contrast
+        run: python tests/test_xgboost_biology_contrast.py
