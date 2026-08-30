@@ -27,17 +27,18 @@ generalize across the three external cohorts (meta-analytic Spearman
 \(\rho=0.691\); directional agreement 82.9%). The external five-model ensemble
 achieves macro-F1 **0.838** and Basal-like F1 **0.963**.
 
-In a size-matched secondary comparison, the InterGATE strict core recovered
-all **7** prespecified Basal-like programmes, whereas a 288-gene panel ranked
-from five frozen XGBoost TreeSHAP models recovered **1**. The comparison
-separates biological recovery from predictive discrimination: XGBoost retained
-the higher external macro-F1 in the paired predictive benchmark.
+Complete Phase 1 and Phase 2 retraining across
+\(\kappa\in\{0.005,0.007,0.010,0.015,0.020\}\) showed stable predictive
+performance and positive graph/message-passing contributions throughout the
+grid. The primary \(\kappa=0.010\) specification lies at the main
+stability-to-size transition for the Basal-like network.
 
 The repository reproduces the complete analysis: public-data acquisition,
 audited endpoint construction, reference M-ComBat, structural meta-learning,
 fixed-graph hybrid classification, multiseed recovery, candidate-matched and
-topology-preserving nulls, atomic retraining ablations, protocol locking,
-external evaluation, calibration, paired tabular benchmarks, and manuscript
+topology-preserving nulls, atomic retraining ablations, full-retraining density
+sensitivity, protocol locking, external evaluation, calibration, paired
+tabular benchmarks, XGBoost--InterGATE programme recovery, and manuscript
 figures.
 
 ## Quick start
@@ -125,16 +126,13 @@ tables are available even when their historical numeric prefixes are lower.
 | 9 | `07b_calibracion_posthoc.ipynb` | Development-fitted temperature calibration |
 | 10 | `08a_benchmark_tabular_pareado_S12.ipynb` | Paired elastic-net, random-forest, and XGBoost benchmark |
 | 11 | `08b_concordancia_estructural_externa.ipynb` | Fixed-edge external structural concordance |
-| 12 | `08c_xgboost_vs_intergate_biology.ipynb` | Size-matched Basal-like gene and programme recovery from frozen XGBoost attribution versus the InterGATE strict core |
+| 12 | `08c_xgboost_vs_intergate_biology.ipynb` | Frozen XGBoost versus InterGATE Basal-like programme recovery |
 | 13 | `09_ablaciones_biologia_score_0075.ipynb` | Definitive-score biological analysis of trained ablations |
-| 14 | `12_controles_revision_q_permutaciones.ipynb` | Score/selector factorial, edge-budget sensitivity, and optional label permutations |
-| 15 | `10_figuras_definitivas.ipynb` | Main figures and complete-core supplementary network |
-| 16 | `13_generate_supplementary_figures_S2_S3.ipynb` | Supplementary sensitivity figures |
-
-Notebook 08c is a prespecified secondary manuscript analysis. It reuses the
-five frozen XGBoost models, locks a development-only TreeSHAP gene panel, and
-compares size-matched gene and programme recovery without changing any fitted
-model or the paired predictive benchmark.
+| 14 | `12_controles_revision_q_permutaciones.ipynb` | Score/selector factorial, subset sensitivity, and optional label permutations |
+| 15 | `12c_sensibilidad_kappa_con_reentrenamiento.ipynb` | Five-density Phase 1 + Phase 2 retraining sensitivity |
+| 16 | `12d_generate_kappa_retraining_figure.ipynb` | Supplementary Figure S8 from the audited 12c source table |
+| 17 | `10_figuras_definitivas.ipynb` | Main figures and complete-core supplementary network |
+| 18 | `13_generate_supplementary_figures_S2_S3.ipynb` | Supplementary sensitivity figures |
 
 The 49 full-retraining label permutations are intentionally opt-in because
 they are computationally expensive. Run them with:
@@ -145,7 +143,9 @@ python scripts/run_pipeline.py analysis --from-step 12 --through-step 12 \
 ```
 
 Without that flag, notebook 12 still reproduces the manuscript's factorial and
-\(k/R\) sensitivity analyses and skips only the extended permutation block.
+subset-sensitivity analyses and skips only the extended permutation block.
+Notebook 12c is independent of the permutation block and can be resumed from
+its per-seed completion contracts.
 
 ## Locked model contract
 
@@ -190,6 +190,7 @@ InterGATE/
 ├── configs/                # machine-readable protocol
 ├── resources_biological/   # identifiers and licensed-resource guide
 ├── scripts/                # preflight and dependency-aware runner
+├── source_data/            # compact audited inputs for publication figures
 ├── tests/                  # protocol, notebook, and synthetic guards
 ├── docs/                   # execution and manuscript-code alignment
 └── assets/                 # graphical abstract in SVG, PDF, and PNG
@@ -212,6 +213,8 @@ The claim-to-code crosswalk is maintained in
 [`docs/MANUSCRIPT_CODE_ALIGNMENT.md`](docs/MANUSCRIPT_CODE_ALIGNMENT.md).
 The completed repository and publication-package checks are recorded in
 [`docs/REPOSITORY_AUDIT.md`](docs/REPOSITORY_AUDIT.md).
+The full-retraining density review and manuscript integration are recorded in
+[`docs/AUDITORIA_12C_Y_ALINEACION.md`](docs/AUDITORIA_12C_Y_ALINEACION.md).
 
 ## Citation and licence
 

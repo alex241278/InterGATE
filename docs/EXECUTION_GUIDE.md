@@ -61,10 +61,6 @@ The main computational blocks are:
 - notebook 04: development baselines and four atomic retraining ablations;
 - notebook 05: matched biological nulls and directed rewiring;
 - notebook 07: single-use locked external prediction;
-- notebook 08a: paired predictive benchmarking with frozen tabular models;
-- notebook 08b: fixed-edge external structural concordance;
-- notebook 08c: size-matched biological comparison with frozen XGBoost
-  attribution;
 - notebook 12: factorial and edge-budget sensitivity controls;
 - notebooks 10 and 13: figures, executed after their source tables exist.
 
@@ -106,14 +102,12 @@ verifies every frozen hash and every source-notebook hash before reading the
 external expression matrices and labels. Its completion marker prevents a
 routine rerun.
 
-## 6. Frozen XGBoost biology comparison
+## 6. Optional XGBoost biology comparison
 
 `08c_xgboost_vs_intergate_biology.ipynb` uses the five frozen XGBoost objects
 from notebook 08a. It verifies model hashes and the exact ordered 7,131-gene
 feature universe, ranks genes only on development validation with TreeSHAP,
-and opens the external block only after the gene panels are locked. This is a
-secondary manuscript analysis of Basal-like gene and programme recovery; it
-does not refit either model or use external data for feature ranking.
+and opens the external block only after the gene panels are locked.
 
 If its ordered-gene preflight fails, rebuild notebook 08a in a new output
 directory with the current prepared matrices. Reordering features after model

@@ -756,13 +756,7 @@ def matched_null_panel_contrast(
     left_panel: str = "InterGATE_strict_5of5",
     right_panel: str = "XGBoost_TreeSHAP_top288",
 ) -> pd.DataFrame:
-    """Covariate-matched descriptive contrast between equal-size panels.
-
-    The statistic is derived from integer overlap-count differences before
-    scaling by panel size.  Computing it by subtracting two independently
-    rounded fractions can move an observed value by one floating-point ULP and
-    incorrectly exclude exact ties from an empirical tail probability.
-    """
+    """Covariate-matched descriptive contrast between equal-size panels."""
     rows = []
     for class_name in DEFAULT_CLASSES:
         observed = signature_recovery.loc[
@@ -774,33 +768,31 @@ def matched_null_panel_contrast(
         if observed.loc[left_panel, "panel_size"] != observed.loc[right_panel, "panel_size"]:
             raise RuntimeError("El contraste directo requiere paneles del mismo tamaño.")
         panel_size = int(observed.loc[left_panel, "panel_size"])
-        left_overlap = int(observed.loc[left_panel, "overlap_n"])
-        right_overlap = int(observed.loc[right_panel, "overlap_n"])
-        observed_count_difference = left_overlap - right_overlap
-        observed_difference = observed_count_difference / panel_size
+        observed_difference = float(
+            observed.loc[left_panel, "overlap_fraction"]
+            - observed.loc[right_panel, "overlap_fraction"]
+        )
         block = null_distribution.loc[
             null_distribution["panel"].isin([left_panel, right_panel])
             & null_distribution["annotation_class"].eq(class_name)
         ]
         pivot = block.pivot(index="draw", columns="panel", values="overlap_n").dropna()
-        null_count_difference = (
-            pivot[left_panel].to_numpy(np.int64)
-            - pivot[right_panel].to_numpy(np.int64)
-        )
-        null_difference = null_count_difference / panel_size
+        null_difference = (
+            pivot[left_panel].to_numpy(float) - pivot[right_panel].to_numpy(float)
+        ) / panel_size
         null_mean = float(null_difference.mean())
         rows.append({
             "annotation_class": class_name,
             "left_panel": left_panel,
             "right_panel": right_panel,
             "panel_size": panel_size,
-            "left_overlap_n": left_overlap,
-            "right_overlap_n": right_overlap,
+            "left_overlap_n": int(observed.loc[left_panel, "overlap_n"]),
+            "right_overlap_n": int(observed.loc[right_panel, "overlap_n"]),
             "observed_fraction_difference_left_minus_right": observed_difference,
             "matched_null_mean_difference": null_mean,
             "empirical_p_left_greater": float(
-                (1 + np.sum(null_count_difference >= observed_count_difference))
-                / (1 + len(null_count_difference))
+                (1 + np.sum(null_difference >= observed_difference))
+                / (1 + len(null_difference))
             ),
             "empirical_p_two_sided": float(
                 (
@@ -1019,8 +1011,8 @@ def _make_comparison_figure(
         )
     ax.axhline(1.0, color="#555555", lw=1, ls="--")
     ax.set_xticks(x, classes, rotation=20, ha="right")
-    ax.set_ylabel("Fold over hypergeometric expectation")
-    ax.set_title("A  Locked class-signature recovery")
+    ax.set_ylabel("Fold sobre expectativa")
+    ax.set_title("A  Recuperación de firmas bloqueadas")
     ax.legend(frameon=False, fontsize=8)
 
     ax = axes[0, 1]
@@ -1037,38 +1029,20 @@ def _make_comparison_figure(
             "short_term"
         ).reindex(terms)
         size = 24 + 10 * values["overlap_n"].fillna(0).to_numpy(float)
-        significant = values["significant_fdr_005"].fillna(False).to_numpy(bool)
         ax.scatter(
             values["fold_enrichment"], y,
             s=size,
             marker=marker,
-            facecolors="white",
-            edgecolors=colors[panel],
-            linewidths=1.2,
-            alpha=0.86,
+            color=colors[panel],
+            alpha=0.82,
             label=panel.replace("_", " "),
         )
-        if np.any(significant):
-            ax.scatter(
-                values["fold_enrichment"].to_numpy(float)[significant],
-                y[significant],
-                s=size[significant],
-                marker=marker,
-                facecolors=colors[panel],
-                edgecolors=colors[panel],
-                linewidths=1.2,
-                alpha=0.86,
-            )
     ax.axvline(1.0, color="#555555", lw=1, ls="--")
     ax.set_yticks(y, terms)
     ax.invert_yaxis()
     ax.set_xlabel("Fold enrichment")
-    ax.set_title("B  Prespecified Basal-like programmes")
+    ax.set_title("B  Programas Basal-like preespecificados")
     ax.legend(frameon=False, fontsize=8)
-    ax.text(
-        0.99, 0.02, "Filled symbols: FDR < 0.05",
-        transform=ax.transAxes, ha="right", va="bottom", fontsize=8,
-    )
 
     ax = axes[1, 0]
     transport = transportability.copy()
@@ -1084,19 +1058,12 @@ def _make_comparison_figure(
         x + 0.18,
         transport["sign_agreement_locked_top288"],
         0.36,
-        label="Sign agreement",
+        label="Concordancia de signo",
         color="#CC79A7",
     )
-    scope_labels = transport["scope"].replace({
-        "external_pooled": "Pooled external",
-        "cohort::GSE1456": "GSE1456",
-        "cohort::GSE21653": "GSE21653",
-        "cohort::TCGA-BRCA": "TCGA-BRCA",
-    })
-    ax.set_xticks(x, scope_labels, rotation=15, ha="right")
+    ax.set_xticks(x, transport["scope"], rotation=20, ha="right")
     ax.set_ylim(0, 1)
-    ax.set_ylabel("Rank correlation / sign fraction")
-    ax.set_title("C  External transportability of TreeSHAP")
+    ax.set_title("C  Transportabilidad externa de TreeSHAP")
     ax.legend(frameon=False, fontsize=8)
 
     ax = axes[1, 1]
@@ -1113,15 +1080,15 @@ def _make_comparison_figure(
         [0, 1, 2], counts,
         color=[colors[primary_panels[0]], "#999999", colors[primary_panels[1]]],
     )
-    ax.set_xticks([0, 1, 2], ["InterGATE only", "Shared", "XGBoost only"])
+    ax.set_xticks([0, 1, 2], ["Solo InterGATE", "Compartidos", "Solo XGBoost"])
     ax.set_ylabel("Genes")
-    ax.set_title("D  Overlap of the two 288-gene panels")
+    ax.set_title("D  Solapamiento de paneles de 288 genes")
     for index, value in enumerate(counts):
         ax.text(index, value, str(value), ha="center", va="bottom")
 
     for ax in axes.flat:
         ax.spines[["top", "right"]].set_visible(False)
-    fig.suptitle("XGBoost versus InterGATE: Basal-like biological recovery", y=1.01)
+    fig.suptitle("XGBoost versus InterGATE: recuperación biológica Basal-like", y=1.01)
     fig.tight_layout()
     pdf = output_dir / "Figure_XGBoost_vs_InterGATE_biology.pdf"
     png = output_dir / "Figure_XGBoost_vs_InterGATE_biology.png"

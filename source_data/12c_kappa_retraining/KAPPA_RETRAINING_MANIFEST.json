@@ -1,0 +1,57 @@
+{
+  "status": "complete",
+  "analysis": "kappa_training_target_sensitivity",
+  "primary_kappa_retained": 0.01,
+  "kappa_grid": [
+    0.005,
+    0.007,
+    0.01,
+    0.015,
+    0.02
+  ],
+  "K_grid": [
+    264,
+    370,
+    529,
+    793,
+    1058
+  ],
+  "seeds": [
+    1234,
+    2025,
+    7,
+    99,
+    31337
+  ],
+  "new_complete_training_runs": 20,
+  "phase1_and_phase2_retrained": true,
+  "external_opened": false,
+  "evaluation_split": "development_validation",
+  "only_authorized_model_field_changed": "KEEP_MIN",
+  "predictive_noninferior_diagnostic": true,
+  "biological_recovery_robust": true,
+  "graph_reliance_robust": true,
+  "input_hashes": {
+    "protocol": "fd3b1c85d6dd712543f5c53970ec7e89981a8f5f80744b9dfed47d9562d1e117",
+    "candidate_prior": "ea06072df80dd57b3f95121345d9b1dddf10ebbe7fe9340a9b4ed61574ef8623",
+    "signature_manifest": "4d2b08d1e3da307b16030ec2badc226e3de9309af5f5cb655f27677f4d8848ea",
+    "implementation": "320516d43f96005c6c0d7ca9d941d5f251c22084e242ad069612657f06d62614",
+    "primary_model_config": "9f54bd2fdb700989605fe3f001587e7bfef49e208bd17820635a53399a750ef2"
+  },
+  "output_hashes": {
+    "kappa_configuration_isolation_audit.csv": "e7b580581f3ca70ce8b43053e726698fe27f7e5642b43dc45e0ea5c242892c39",
+    "kappa_development_results.csv": "35f4637979a4758197e9593f0b1abfd3b76c697ab808eab271a5819cf191fee9",
+    "kappa_bundle_integrity_audit.csv": "351b7213bf618b8f6c4d6951ded7ad6a0444de6b7f706d8987b5debc4d975260",
+    "kappa_predictive_summary.csv": "d9f9ce3462a61891ac20f921e53cc229eba7ac521b505bd0b5f1fa7a1aac79d4",
+    "kappa_predictive_paired_vs_primary.csv": "89fd7d15b4e61feccfbfb87ca491e3bb2532f20c3e417cfbef1efae1482e058f",
+    "kappa_structural_stability.csv": "501fc6fc5e60564d0b018a77d4cd433ef0346bb74d750569ab1bd22ccf126596",
+    "kappa_topology_summary.csv": "e41f729c19369855014f90c4b90d9b75f212a0ab398f0b7feb67068aaf4dc698",
+    "kappa_signature_enrichment.csv": "6e1b66aba29ca81ea8ff983ac5e838025da6ec920b475787d8e71853d8b6c8bf",
+    "kappa_signature_specificity.csv": "dfcd9dcd27246cbae76d3e12851e8e2535875c01aec88389170e98f7f06776e5",
+    "kappa_consensus_concordance_vs_primary.csv": "61cd7354cfe59a4bc4c1570a0d8dbc63bd446022cc0d63cc784c38483b3f06ec",
+    "kappa_branch_reliance_validation.csv": "1b1fabb9c16c84457aaf4574d060fd548de6a90221e7c9c01d1ff3e0cd0ee21c",
+    "kappa_branch_reliance_summary.csv": "30fa38a4959262307a464925e7f99c70d83769af0f2497d58c54f8a8d92cd8f6",
+    "Supplementary_Table_Kappa_retraining_sensitivity.csv": "cf3068ddf99356b5ada8b669554cc4cc67d5ea1ba420554c2410184138a27d73",
+    "manuscript_ready_kappa_retraining.md": "e2bd2d7baf22d272d23f077d28202a442650f965a70a5836bb1b64f79ba7afbf"
+  }
+}

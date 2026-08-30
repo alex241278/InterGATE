@@ -1,4 +1,4 @@
-"""Reprocess trained InterGATE ablations with the locked 0.075 score.
+"""Reprocess trained InterGATE V8 ablations with the locked 0.075 score.
 
 Only dense structural exports from the already completed FULL and four atomic
 ablation arms are read.  No optimizer, model checkpoint or external sample is
@@ -212,8 +212,8 @@ def run_locked_score_ablation_biology(
         candidates_file, index=False, compression="gzip"
     )
 
-    # Exact-K and the FULL strict-core size are observed outputs. Infer them
-    # directly from the score-locked FULL tables.
+    # Exact-K and the FULL strict-core size are observed V8 outputs.  Infer
+    # them from the score-locked FULL tables instead of importing V7's 529/284.
     locked_full_root = _locked_full_seed_root(results_root)
     full_reference_strict, full_reference_seed_frames = (
         strict_edge_core_from_seed_tables(

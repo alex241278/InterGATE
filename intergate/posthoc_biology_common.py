@@ -1,4 +1,4 @@
-"""Shared, read-only helpers for the locked InterGATE post-hoc analyses.
+"""Shared, read-only helpers for the locked InterGATE V8 post-hoc analyses.
 
 This file is an additive analysis module.  It does not replace or modify any
 source file listed in ``protocol_lock_v8.json`` and it never trains a model.
@@ -22,9 +22,10 @@ LOCKED_CONTEXT_WEIGHT = 0.35
 LOCKED_SUPPORT_WEIGHT = 0.075
 LOCKED_TARGET_CLASS = "Basal-like"
 LOCKED_SEEDS = (1234, 2025, 7, 99, 31337)
-# Exact-K and strict-core size are observed outputs rather than protocol
-# constants. Post-hoc analyses infer both quantities from the locked per-seed
-# tables and therefore cannot inherit a stale topology.
+# V7 happened to yield Exact-K=529 and a 284-edge Basal-like 5/5 core.  Those
+# are results, not V8 protocol constants.  Post-hoc V8 analyses infer both
+# quantities from the locked per-seed tables so a genuinely new V8 run cannot
+# silently inherit V7's observed topology.
 
 
 def safe_name(value: Any) -> str:

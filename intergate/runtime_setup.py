@@ -125,14 +125,15 @@ def assert_v8_protocol(cfg=CFG) -> None:
     )
     if (phase1_draws, phase1_updates, support_draws) != (384, 2, 128):
         raise ValueError(
-            "Presupuesto de entrenamiento incompatible con el protocolo: "
-            f"muestras/episodio={phase1_draws}, "
-            f"actualizaciones/episodio={phase1_updates}, "
+            "Presupuesto V8.1 no pareado con V7: "
+            f"draws/episodio={phase1_draws}, "
+            f"updates/episodio={phase1_updates}, "
             f"muestras/soporte={support_draws}."
         )
 
 
-# Alias de importación conservado para compatibilidad de la API pública.
+# Alias de importación para módulos históricos. Los notebooks entregados en
+# V8 llaman explícitamente a assert_v8_protocol.
 assert_v4_protocol = assert_v8_protocol
 
 

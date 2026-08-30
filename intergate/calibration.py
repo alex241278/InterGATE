@@ -2,7 +2,7 @@
 
 Rationale
 ---------
-InterGATE assembles its four-class logit vector from the diagonal of four
+InterGATE V8 assembles its four-class logit vector from the diagonal of four
 per-class experts (``model.HybridGNNTabular.forward``), so the softmax is taken
 over logits produced by different embeddings and is not the output of any single
 normalized classifier.  The consequence is visible in the locked external run:
@@ -75,7 +75,7 @@ __all__ = [
 
 
 def probability_columns(class_names: Sequence[str]) -> list[str]:
-    """Column names used by the prediction frames."""
+    """Column names used by the V8 prediction frames."""
     return [f"p_{name}" for name in class_names]
 
 

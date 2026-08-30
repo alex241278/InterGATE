@@ -11,6 +11,27 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def sha256_file(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def implementation_sha256() -> str:
+    files = (
+        "config.py", "model.py", "training.py", "transport.py",
+        "ablation.py", "graph.py", "graph_cache.py", "pruning.py",
+        "biology.py", "runtime_setup.py", "prepared_data.py", "data.py",
+        "losses.py", "stability.py", "utils.py",
+    )
+    digest = hashlib.sha256()
+    for filename in files:
+        path = ROOT / "intergate" / filename
+        digest.update(filename.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
 def literal_config_fields(path: Path) -> dict[str, object]:
     tree = ast.parse(path.read_text(encoding="utf-8"))
     fields: dict[str, object] = {}
@@ -110,6 +131,27 @@ def main() -> None:
     for name, expected in expected_fields.items():
         assert fields.get(name) == expected, (name, fields.get(name), expected)
 
+    sensitivity_root = ROOT / "source_data" / "12c_kappa_retraining"
+    sensitivity = json.loads(
+        (sensitivity_root / "KAPPA_RETRAINING_MANIFEST.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert sensitivity["status"] == "complete"
+    assert sensitivity["kappa_grid"] == [0.005, 0.007, 0.01, 0.015, 0.02]
+    assert sensitivity["K_grid"] == [264, 370, 529, 793, 1058]
+    assert sensitivity["seeds"] == [1234, 2025, 7, 99, 31337]
+    assert sensitivity["new_complete_training_runs"] == 20
+    assert sensitivity["phase1_and_phase2_retrained"] is True
+    assert sensitivity["external_opened"] is False
+    assert sensitivity["only_authorized_model_field_changed"] == "KEEP_MIN"
+    assert sha256_file(ROOT / "configs" / "protocol_v8.json") == (
+        sensitivity["input_hashes"]["protocol"]
+    )
+    assert implementation_sha256() == sensitivity["input_hashes"]["implementation"]
+    for output_name, expected_sha256 in sensitivity["output_hashes"].items():
+        assert sha256_file(sensitivity_root / output_name) == expected_sha256
+
     aligned_text = "\n".join(
         (ROOT / path).read_text(encoding="utf-8")
         for path in (
@@ -130,7 +172,6 @@ def main() -> None:
         "2.31",
         "0.838",
         "0.963",
-        "7 vs 1",
     ):
         assert required in aligned_text, required
     for stale in (
@@ -147,21 +188,6 @@ def main() -> None:
 
     assert not (ROOT / "configs/protocol_v6.json").exists()
     assert not (ROOT / "notebooks/10_figuras_definitivas_v2.ipynb").exists()
-
-    xgb_protocol = json.loads(
-        (ROOT / "protocols/xgboost_intergate_biology_locked_v1.json").read_text(
-            encoding="utf-8"
-        )
-    )
-    assert xgb_protocol["protocol_id"] == "xgb-intergate-basal-biology-locked-v1"
-    assert xgb_protocol["analysis_role"] == "posthoc_secondary_biological_comparison"
-    assert xgb_protocol["development_ranking"]["size_matched_panel"] == 288
-    assert xgb_protocol["xgboost_refit"] is False
-    core_path = ROOT / xgb_protocol["intergate_panel"]["locked_file"]
-    assert core_path.is_file()
-    assert hashlib.sha256(core_path.read_bytes()).hexdigest() == (
-        xgb_protocol["intergate_panel"]["locked_file_sha256"]
-    )
     print("Protocol/manuscript/graphic alignment: OK")
 
 

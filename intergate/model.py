@@ -430,10 +430,11 @@ class ImprovedSharedGraphGNN(nn.Module):
         self.inp_bn2  = NodeBatchNorm(hidden)
         self.inp_drop = nn.Dropout(dropout)
 
-        # Identidad entrenable de gen. Sin un parámetro indexado por nodo
-        # (inp_lin1 y NodeBatchNorm son compartidos), dos genes con la misma
-        # expresión y un vecindario isomorfo serían indistinguibles. La
-        # inicialización a cero conserva una condición inicial neutra.
+        # V8-1: identidad de gen. El encoder heredado de V7 no tiene ningún
+        # parámetro indexado por nodo (inp_lin1 y NodeBatchNorm son compartidos), así
+        # que dos genes con la misma expresion y vecindario isomorfo son
+        # indistinguibles. Inicializado a cero: en el paso 0 el modelo es
+        # numéricamente idéntico al punto de partida de V7.
         self.use_node_identity = bool(use_node_identity)
         if self.use_node_identity:
             self.node_emb = nn.Embedding(self.num_nodes, hidden)
@@ -1390,8 +1391,8 @@ class HybridGNNTabular(nn.Module):
         self.is_hybrid = True
 
         self.tab_in_dim = int(tab_in_dim)
-        # Anchura independiente de la rama tabular. Si es None o 0, se usa
-        # `hidden`, preservando las formas esperadas del state_dict.
+        # V8: anchura de la rama tabular. Si es None o 0 cae en `hidden` y el
+        # modelo es identico al de V7, incluidas las formas del state_dict.
         self.gnn_hidden = int(hidden)
         self.tab_hidden = int(tab_hidden) if tab_hidden else int(hidden)
         self.n_classes = int(n_classes)
@@ -1402,9 +1403,9 @@ class HybridGNNTabular(nn.Module):
         self.blend_logits = bool(blend_logits)
         self.blend_init = float(blend_init)
 
-        # No se reescala por 1/(1-p): esto simula una rama ausente, no un
-        # dropout ordinario sobre activaciones, y la fusión debe aprender a
-        # operar con el cero literal.
+        # V8. No reescalan por 1/(1-p): no son un regularizador sobre
+        # activaciones sino la simulacion de una rama ausente, asi que la
+        # fusion debe aprender a funcionar con el cero literal.
         self.branch_dropout_tab = float(branch_dropout_tab)
         self.branch_dropout_gnn = float(branch_dropout_gnn)
 
@@ -1568,9 +1569,9 @@ class HybridGNNTabular(nn.Module):
                         z_classes[:, class_id, :], z_tab
                     ], dim=-1))
                     logits_all = self.fusion_head4(z)
-                    # La matriz completa de n_clases² logits alimenta la
-                    # supervisión profunda de los expertos; la diagonal
-                    # contiene los cuatro logits de salida.
+                    # V8-2: se calculan n_clases^2 logits; V7 usaba solo la
+                    # diagonal. La matriz completa alimenta la supervision
+                    # profunda de expertos.
                     expert_logits.append(logits_all)
                     logits_by_class.append(logits_all[:, class_id])
                     aux_by_class.append(self.fusion_headAO(z))

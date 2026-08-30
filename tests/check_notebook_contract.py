@@ -33,6 +33,8 @@ ANALYSIS = [
     "09_ablaciones_biologia_score_0075.ipynb",
     "10_figuras_definitivas.ipynb",
     "12_controles_revision_q_permutaciones.ipynb",
+    "12c_sensibilidad_kappa_con_reentrenamiento.ipynb",
+    "12d_generate_kappa_retraining_figure.ipynb",
     "13_generate_supplementary_figures_S2_S3.ipynb",
 ]
 ABSOLUTE_PATH = re.compile(r"(?:/home/|/Users/|/workspace/|[A-Za-z]:\\\\Users\\\\)")

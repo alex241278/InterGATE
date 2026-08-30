@@ -343,12 +343,15 @@ class InterGATEConfig:
     # Esto evita que GSE20711 se recicle decenas de veces mientras GSE96058 no
     # completa ni una pasada.
     TRANSPORT_BALANCED_SAMPLING: bool = True
-    # Cada episodio procesa 384 muestras mediante microbatches de tamaño 2 y
-    # realiza dos actualizaciones (120 + 72 microbatches) con acumulación 120.
+    # V7 ejecutaba 96 microbatches de 4 muestras: 384 draws por episodio y
+    # dos actualizaciones (60 + 36 microbatches) con acumulación 60. V8.1 usa
+    # microbatch 2, por lo que duplica pasos y acumulación para conservar
+    # exactamente 384 draws y las mismas dos actualizaciones (120 + 72).
     TRANSPORT_STEPS_PER_EPISODE: int = 192
     TRANSPORT_CHECKPOINT_METRIC: str = "cohort_macro_f1"
     # Auditoría final: cinco pasos de influencia estructural sobre 128
-    # muestras balanceadas (64 microbatches de tamaño 2) por deleción.
+    # muestras balanceadas (64 microbatches de tamaño 2) por deleción. Así se
+    # conserva el soporte de V7: 32 microbatches de tamaño 4.
     TRANSPORT_SUPPORT_STEPS: int = 5
     TRANSPORT_SUPPORT_BATCHES: int = 64
     TRANSPORT_MIN_COHORT_SAMPLES: int = 2
@@ -616,13 +619,13 @@ class InterGATEConfig:
         )
         if phase1_draws != 384 or phase1_updates != 2:
             raise ValueError(
-                "El protocolo exige 384 muestras y 2 actualizaciones por "
-                "episodio de fase 1; se obtuvieron "
+                "V8.1 exige presupuesto de fase 1 pareado con V7: "
+                "384 draws y 2 actualizaciones por episodio; se obtuvieron "
                 f"{phase1_draws} y {phase1_updates}."
             )
         if support_draws != 128:
             raise ValueError(
-                "El protocolo exige 128 muestras por paso de soporte; se obtuvieron "
+                "V8.1 exige 128 muestras por paso de soporte; se obtuvieron "
                 f"{support_draws}."
             )
         if str(self.TRANSPORT_CHECKPOINT_METRIC) not in {

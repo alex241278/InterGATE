@@ -62,10 +62,16 @@ ANALYSIS_STEPS = (
     NotebookStep(
         "08c",
         ROOT / "notebooks/08c_xgboost_vs_intergate_biology.ipynb",
-        ROOT / "results_v8/08c_xgboost_intergate_biology/analysis_manifest.json",
+        ROOT / "results_v8/08c_xgboost_intergate_biology/EXTERNAL_VALIDATION_COMPLETE.json",
     ),
     NotebookStep("09", ROOT / "notebooks/09_ablaciones_biologia_score_0075.ipynb"),
     NotebookStep("12", ROOT / "notebooks/12_controles_revision_q_permutaciones.ipynb"),
+    NotebookStep(
+        "12c",
+        ROOT / "notebooks/12c_sensibilidad_kappa_con_reentrenamiento.ipynb",
+        ROOT / "results_v8/12c_kappa_retraining/KAPPA_RETRAINING_MANIFEST.json",
+    ),
+    NotebookStep("12d", ROOT / "notebooks/12d_generate_kappa_retraining_figure.ipynb"),
     NotebookStep("10", ROOT / "notebooks/10_figuras_definitivas.ipynb"),
     NotebookStep("13", ROOT / "notebooks/13_generate_supplementary_figures_S2_S3.ipynb"),
 )
@@ -151,7 +157,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("stage", choices=("data", "analysis", "all", "list"))
     valid_steps = (
         "00", "00a", "00b", "01", "02", "03", "04", "05", "06",
-        "07", "07b", "08a", "08b", "08c", "09", "10", "12", "13",
+        "07", "07b", "08a", "08b", "08c", "09", "10", "12", "12c",
+        "12d", "13",
     )
     parser.add_argument("--from-step", choices=valid_steps)
     parser.add_argument("--through-step", choices=valid_steps)

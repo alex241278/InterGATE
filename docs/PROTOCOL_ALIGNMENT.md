@@ -13,6 +13,7 @@ This table is the compact human-readable counterpart of
 | Candidate rows / eligible structural units | 53,205 / 52,878 |
 | Structural seeds | 1234, 2025, 7, 99, 31337 |
 | Primary density and edge budget | \(\kappa=0.01\); Exact-\(K=529\) per class and seed |
+| Full-retraining density sensitivity | \(\kappa=0.005,0.007,0.010,0.015,0.020\); 25 complete seed-density bundles; only `KEEP_MIN` changed |
 | Structural meta-learning | 60 episodes; 192 microbatches × 2 samples; 2 optimizer updates per episode |
 | Cohort-deletion support | 5 first-order steps; 64 microbatches × 2 samples per step |
 | Structural context | train-only within-cohort class-versus-rest differential correlation |
@@ -32,3 +33,10 @@ count-matched outputs. The total structural score defines the fixed predictive
 topology. Centred class deviation, train-only contextual agreement, and
 cohort-deletion support define the biological network. Curated prior direction
 and sign provide the interaction semantics.
+
+The primary 1% budget is a scale-free equal-quota specification. Complete
+retraining places it at the main Basal-like stability-to-size transition:
+prediction remains stable across the five-density grid, graph-derived
+contributions remain positive, and the increase from 0.7% to 1% produces the
+largest joint gain in multiseed stability and consensus cohesion before the
+network grows by a further 50%.

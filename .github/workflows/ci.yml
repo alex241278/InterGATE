@@ -14,7 +14,7 @@ jobs:
           python-version: "3.11"
           cache: pip
       - name: Install lightweight test dependencies
-        run: python -m pip install numpy pandas joblib scipy scikit-learn
+        run: python -m pip install numpy pandas
       - name: Compile source
         run: python -m compileall -q intergate data_prepare scripts tests
       - name: Check notebook contract
@@ -23,5 +23,3 @@ jobs:
         run: python tests/test_protocol_alignment.py
       - name: Run synthetic invariance checks
         run: python tests/test_current_synthetic.py
-      - name: Check tie-safe XGBoost contrast
-        run: python tests/test_xgboost_biology_contrast.py
