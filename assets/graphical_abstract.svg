@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1536" height="1024" viewBox="0 0 1536 1024" role="img" aria-labelledby="title desc">
-  <title id="title">InterGATE graphical abstract</title>
+  <title id="title">InterGATE: A multi-cohort graph-learning framework for reproducible Basal-like interaction network recovery from breast cancer transcriptomes</title>
   <desc id="desc">Four-panel graphical abstract summarizing cohorts and prior, structural and hybrid learning, the Basal-like strict five-of-five core, and multi-level validation.</desc>
   <defs>
     <style>
       .sans{font-family:'DejaVu Sans',Arial,sans-serif}.cond{font-family:'DejaVu Sans Condensed','Arial Narrow',Arial,sans-serif}
       .navy{fill:#071b58}.body{fill:#111}.white{fill:#fff}.blue{fill:#0649d8}.teal{fill:#008a99}.purple{fill:#5c2483}.orange{fill:#ea4b00}.red{fill:#d60a08}
-      .h1{font-size:92px;font-weight:800}.subtitle{font-size:29px;font-weight:700;font-style:italic}.panelhead{font-size:21px;font-weight:800}.num{font-size:28px;font-weight:800}
+      .h1{font-size:72px;font-weight:800}.subtitle{font-size:22px;font-weight:700}.panelhead{font-size:21px;font-weight:800}.num{font-size:28px;font-weight:800}
       .metric{font-size:17px;font-weight:700}.small{font-size:14px}.tiny{font-size:12px}.label{font-size:16px;font-weight:700}.boxlabel{font-size:14px}.gene{font-size:17px;font-weight:700}
       .rule{stroke-width:1.5}.network{stroke:#666;stroke-width:1.4}.activation{stroke:#19a528;stroke-width:2}.inhibition{stroke:#e32222;stroke-width:2}
     </style>
@@ -22,8 +22,9 @@
   </defs>
 
   <rect width="1536" height="1024" fill="#f5f7fa"/>
-  <text x="768" y="82" text-anchor="middle" class="sans navy h1">InterGATE</text>
-  <text x="768" y="117" text-anchor="middle" class="cond navy subtitle">Reproducible Basal-like interaction recovery across breast cancer cohorts</text>
+  <text x="768" y="64" text-anchor="middle" class="sans navy h1">InterGATE</text>
+  <text x="768" y="94" text-anchor="middle" class="cond navy subtitle">A multi-cohort graph-learning framework for reproducible Basal-like</text>
+  <text x="768" y="120" text-anchor="middle" class="cond navy subtitle">interaction network recovery from breast cancer transcriptomes</text>
 
   <!-- Panel containers -->
   <g>
@@ -135,15 +136,15 @@
 
   <!-- Panel 4 -->
   <g class="cond body">
-    <text x="1329" y="204" text-anchor="middle" class="metric" style="font-size:14.5px">Candidate-matched recovery</text>
-    <text x="1329" y="225" text-anchor="middle" class="metric" style="font-size:14.5px">global FDR = 0.0096</text>
-    <text x="1329" y="247" text-anchor="middle" class="metric" style="font-size:13.2px">External fixed-edge concordance: ρ = 0.691</text>
-    <text x="1329" y="269" text-anchor="middle" class="metric" style="font-size:14.5px">Direction agreement: 82.9%</text>
+    <text x="1329" y="204" text-anchor="middle" class="metric" style="font-size:14.5px">Strict-core candidate-matched recovery</text>
+    <text x="1329" y="225" text-anchor="middle" class="metric" style="font-size:13.8px">2.30–5.50×; empirical P = 0.0010</text>
+    <text x="1329" y="247" text-anchor="middle" class="metric" style="font-size:13.2px">Label-permutation retraining: P = 0.020</text>
+    <text x="1329" y="269" text-anchor="middle" class="metric" style="font-size:12.0px">External concordance: ρ = 0.691 | direction = 82.9%</text>
     <text x="1329" y="299" text-anchor="middle" class="red label">OBSERVED vs MATCHED NULL</text>
     <g class="tiny"><rect x="1377" y="314" width="18" height="14" fill="#ea4b00"/><text x="1403" y="326">Observed</text><rect x="1377" y="336" width="18" height="14" fill="#c8c8c8"/><text x="1403" y="348">Matched null</text></g>
     <line x1="1164" y1="457" x2="1493" y2="457" stroke="#111" stroke-width="1.5"/>
-    <g><rect x="1182" y="362" width="29" height="95" fill="#ea4b00"/><rect x="1213" y="414" width="29" height="43" fill="#c8c8c8"/><rect x="1304" y="418" width="29" height="39" fill="#ea4b00"/><rect x="1335" y="450" width="29" height="7" fill="#c8c8c8"/><rect x="1425" y="407" width="29" height="50" fill="#ea4b00"/><rect x="1456" y="435" width="29" height="22" fill="#c8c8c8"/></g>
-    <g class="label"><text x="1212" y="351" text-anchor="middle">2.22×</text><text x="1335" y="407" text-anchor="middle">5.94×</text><text x="1456" y="396" text-anchor="middle">2.31×</text></g>
+    <g><rect x="1182" y="358" width="29" height="99" fill="#ea4b00"/><rect x="1213" y="414" width="29" height="43" fill="#c8c8c8"/><rect x="1304" y="418" width="29" height="39" fill="#ea4b00"/><rect x="1335" y="450" width="29" height="7" fill="#c8c8c8"/><rect x="1425" y="400" width="29" height="57" fill="#ea4b00"/><rect x="1456" y="435" width="29" height="22" fill="#c8c8c8"/></g>
+    <g class="label"><text x="1212" y="347" text-anchor="middle">2.30×</text><text x="1335" y="407" text-anchor="middle">5.50×</text><text x="1456" y="389" text-anchor="middle">2.60×</text></g>
     <g class="small"><text x="1212" y="479" text-anchor="middle">≥1 endpoint</text><text x="1335" y="479" text-anchor="middle">Both endpoints</text><text x="1456" y="479" text-anchor="middle">Unique nodes</text></g>
     <line x1="1156" y1="507" x2="1501" y2="507" stroke="#ea4b00" class="rule"/>
     <text x="1329" y="531" text-anchor="middle" class="red label" style="font-size:12.5px">DEVELOPMENT–EXTERNAL CONCORDANCE</text>

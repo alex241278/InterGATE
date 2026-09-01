@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 message: "If you use InterGATE, please cite the associated manuscript."
-title: "InterGATE: reproducible biology-first sparse interactome learning"
+title: "InterGATE: A multi-cohort graph-learning framework for reproducible Basal-like interaction network recovery from breast cancer transcriptomes"
 type: software
 version: 8.1.0
 date-released: 2026-08-28
@@ -21,7 +21,7 @@ authors:
     affiliation: "Universidad Rey Juan Carlos; CIBERINFEC"
 preferred-citation:
   type: article
-  title: "InterGATE recovers a reproducible Basal-like interaction core across breast cancer transcriptomic cohorts"
+  title: "InterGATE: A multi-cohort graph-learning framework for reproducible Basal-like interaction network recovery from breast cancer transcriptomes"
   authors:
     - family-names: Alvarez-Frutos
       given-names: Lucia

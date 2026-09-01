@@ -42,7 +42,7 @@ the source package supplied for this repository update.
 | Basal-like strict core: 299 edges / 288 genes | Supplementary Data 1 contains 299 edge rows and 288 unique genes | Verified |
 | Edge provenance: 199 HuRI / 67 activation / 33 inhibition | Supplementary Data 1 edge inventory | Verified |
 | Mean pairwise Basal-like Jaccard: 0.607 | main and supplementary structural tables | Consistent |
-| Candidate-matched folds: 2.22 / 5.94 / 2.31; global FDR 0.0096 | canonical 48-test family in manuscript tables | Consistent |
+| Candidate-matched folds: 2.30 / 5.50 / 2.60; global FDR 0.0010 | selected-edge-excluding matched-null family in manuscript tables | Consistent |
 | External meta-Spearman 0.691; direction agreement 82.9% | fixed-edge concordance tables | Consistent |
 | External ensemble macro-F1 0.838; Basal-like F1 0.963 | Supplementary Data 2 and manuscript table | Consistent |
 | Temperature 1.17394; ECE 0.0652→0.0466 | calibration tables in Supplementary Data 2 | Consistent |

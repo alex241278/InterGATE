@@ -1,7 +1,7 @@
 # InterGATE
 
 <p align="center">
-  <strong>Reproducible, biology-first interaction recovery from multi-cohort breast-cancer transcriptomics</strong>
+  <strong>A multi-cohort graph-learning framework for reproducible Basal-like interaction network recovery from breast cancer transcriptomes</strong>
 </p>
 
 <p align="center">

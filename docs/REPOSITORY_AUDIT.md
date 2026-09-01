@@ -32,8 +32,8 @@ The implementation-to-method mapping is detailed in
 | Basal-like strict core | 299 edges / 288 genes | 299 / 288 |
 | Mean Basal-like edge Jaccard | 0.607 | 0.607 |
 | Edge provenance | 199 HuRI / 67 activation / 33 inhibition | Same |
-| Candidate-matched recovery folds | 2.22 / 5.94 / 2.31 | Same |
-| Canonical global FDR | 0.0096 | 0.0096 |
+| Candidate-matched recovery folds | 2.30 / 5.50 / 2.60 | Same |
+| Three-statistic FDR | 0.0010 | 0.0010 |
 | External meta-Spearman | 0.691 | 0.691 |
 | External direction agreement | 82.9% | 82.9% |
 | External ensemble macro-F1 | 0.838 | 0.838 |
