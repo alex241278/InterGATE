@@ -1,0 +1,115 @@
+{
+  "schema_version": "1.0",
+  "manifest_scope": "public analysis contract and reported execution summary",
+  "analysis": "orthogonal breast-lineage CRISPR dependency analysis",
+  "reported_analysis_status": "complete",
+  "depmap_release": "26Q1",
+  "generator": "notebooks/05_validacion_biologica_y_depmap.ipynb",
+  "input_contract": {
+    "directory": "resources_biological/depmap/26Q1",
+    "required_files": [
+      {
+        "name": "CRISPRGeneEffect.csv",
+        "role": "Chronos gene-effect matrix",
+        "redistributed": false
+      },
+      {
+        "name": "Model.csv",
+        "accepted_alternative": "Models.csv",
+        "role": "cell-line metadata",
+        "redistributed": false
+      },
+      {
+        "name": "OmicsExpressionProteinCodingGenesTPMLogp1.csv",
+        "accepted_alternative": "OmicsExpressionTPMLogp1HumanProteinCodingGenes.csv",
+        "role": "log1p TPM expression used to define proxy groups",
+        "redistributed": false
+      }
+    ],
+    "runtime_provenance": "Notebook 05 writes the selected filenames, numeric thresholds, group counts, and SHA-256 hashes to results_v8/05_biology_validation/depmap_manifest.json."
+  },
+  "eligibility": {
+    "lineage": "breast",
+    "requires_chronos": true,
+    "requires_finite_expression_for": [
+      "ESR1",
+      "PGR",
+      "ERBB2"
+    ],
+    "minimum_lines_per_group": 5
+  },
+  "grouping": {
+    "method": "ESR1_or_PGR_median_and_ERBB2_q75_within_breast",
+    "manual_overrides": false,
+    "thresholds": {
+      "ESR1_median": "median ESR1 expression across eligible breast-lineage cell lines",
+      "PGR_median": "median PGR expression across eligible breast-lineage cell lines",
+      "ERBB2_q75": "75th percentile of ERBB2 expression across eligible breast-lineage cell lines"
+    },
+    "hierarchical_assignment": [
+      {
+        "internal_key": "her2_amplified",
+        "publication_label": "ERBB2-high",
+        "rule": "ERBB2 > ERBB2_q75"
+      },
+      {
+        "internal_key": "receptor_positive",
+        "publication_label": "ESR1-or-PGR-high",
+        "rule": "not ERBB2-high and (ESR1 > ESR1_median or PGR > PGR_median)"
+      },
+      {
+        "internal_key": "receptor_negative",
+        "publication_label": "ESR1/PGR-low",
+        "rule": "all remaining eligible lines"
+      }
+    ],
+    "reported_counts": {
+      "ERBB2-high": 13,
+      "ESR1-or-PGR-high": 26,
+      "ESR1/PGR-low": 12,
+      "total": 51
+    }
+  },
+  "focal_mapping": {
+    "LumA": "ESR1-or-PGR-high",
+    "LumB": "ESR1-or-PGR-high",
+    "HER2-enriched": "ERBB2-high",
+    "Basal-like": "ESR1/PGR-low"
+  },
+  "interpretation_boundary": {
+    "clinical_hormone_receptor_categories": false,
+    "clinical_HER2_amplification_categories": false,
+    "PAM50_subtype_assignments": false,
+    "description": "The three groups are relative-expression proxies used only for the orthogonal cell-line dependency analysis."
+  },
+  "dependency_analysis": {
+    "score": "Chronos",
+    "contrast": "proxy group minus the remaining eligible breast-lineage lines",
+    "gene_level_test": "Welch two-sample test",
+    "more_negative_means": "greater dependency in the focal proxy group",
+    "selective_dependency_criteria": {
+      "group_minus_rest_mean_difference_lte": -0.25,
+      "group_mean_lte": -0.5,
+      "gene_level_FDR_lt": 0.05
+    }
+  },
+  "panel_analysis": {
+    "degree_matched_draws": 1000,
+    "matching": "candidate-prior degree decile",
+    "mean_effect_FDR_family": {
+      "tests": 24,
+      "composition": "4 class networks x 2 panel definitions x 3 proxy groups"
+    }
+  },
+  "reported_basal_like_strict_core": {
+    "core_genes": 288,
+    "genes_represented_in_depmap": 278,
+    "focal_proxy_group": "ESR1/PGR-low",
+    "observed_mean_group_minus_rest": 0.008517,
+    "matched_null_mean": 0.002905,
+    "lower_tail_empirical_p": 0.899101,
+    "FDR": 0.975025,
+    "conclusion": "No uniform selective-dependency signal was supported in the ESR1/PGR-low proxy group."
+  },
+  "external_transcriptomic_test_opened": false
+}
