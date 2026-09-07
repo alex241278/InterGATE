@@ -47,7 +47,6 @@ def patch_notebook(text: str, kind: str) -> str:
             s = s.replace("C  Functional coherence beyond preserved topology", "C  Hallmark coherence in consensus networks")
             s = s.replace("FIG3_TITLE = 'Subtype-specific recovery and functional coherence'",
                           "FIG3_TITLE = 'Biological recovery in consensus networks'")
-            s = s.replace('f"{row.fold_over_null:.2f}', 'f"{row.fold_over_null:.2f}')
             if cell['cell_type'] == 'code':
                 s = re.sub(r'fontsize\s*=\s*(\d+(?:\.\d+)?)',
                     lambda m: ("fontsize=STYLE['annotation_size']" if float(m[1]) < 12
@@ -60,7 +59,7 @@ def patch_notebook(text: str, kind: str) -> str:
                         "        aliases = {'Figure_structural_recovery': 'Figure2',\n"
                         "                   'Figure_Basal_strict_core': 'Figure3',\n"
                         "                   'Figure_biological_validation': 'Figure4',\n"
-                        "                   'Figure_external_concordance': 'Figure5',\n"
+                        "                   'Figure_external_structural_concordance': 'Figure5',\n"
                         "                   'Figure_controls_sensitivity': 'FigureS8'}\n"
                         "        if stem in aliases:\n"
                         "            import shutil\n"

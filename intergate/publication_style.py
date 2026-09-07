@@ -69,5 +69,14 @@ def prepare_figure(fig, style: dict[str, Any] | None = None) -> None:
                 text.set_fontsize(max(text.get_fontsize(), style['legend_size']))
     if fig._suptitle is not None:
         fig._suptitle.set_fontsize(max(fig._suptitle.get_fontsize(), style['figure_title_size']))
+    # Keep this known three-item legend off the external-effect observations.
+    # Rebuilding it is idempotent and preserves its handles, labels and colours.
+    expected = {'Matched-null 95% interval', 'Matched-null mean', 'Basal-like 5/5 core'}
+    for ax in fig.axes:
+        handles, labels = ax.get_legend_handles_labels()
+        if set(labels) == expected and len(labels) == 3:
+            fig.set_size_inches(fig.get_figwidth(), max(fig.get_figheight(), 5.8))
+            ax.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5, -0.21),
+                      ncol=2, frameon=False, fontsize=style['legend_size'])
     # Existing constrained/tight layout engines will account for the new fonts.
     fig.canvas.draw()
