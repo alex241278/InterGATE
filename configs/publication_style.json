@@ -1,0 +1,14 @@
+{
+  "font_family": "DejaVu Sans",
+  "base_font_size": 14.0,
+  "figure_title_size": 20.0,
+  "panel_title_size": 16.0,
+  "axis_label_size": 14.0,
+  "tick_label_size": 13.0,
+  "legend_size": 12.0,
+  "annotation_size": 12.0,
+  "gene_label_size": 12.5,
+  "dpi": 600,
+  "svg_fonttype": "none",
+  "pdf_fonttype": 42
+}
