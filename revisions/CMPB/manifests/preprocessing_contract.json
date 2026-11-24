@@ -1,0 +1,26 @@
+{
+  "method": "reference_mcombat",
+  "implementation": "inmoose.pycombat.pycombat_norm",
+  "covariates": null,
+  "active_labels": [
+    "LumA",
+    "LumB",
+    "HER2-enriched",
+    "Basal-like"
+  ],
+  "development_cohorts": [
+    "GSE96058",
+    "GSE25066",
+    "GSE162228",
+    "GSE20711"
+  ],
+  "external_cohorts": [
+    "TCGA-BRCA",
+    "GSE21653",
+    "GSE1456"
+  ],
+  "pseudocount_target": 1.0,
+  "reference_floor_filter_max_fraction": 0.5,
+  "new_cohort_min_samples": 2,
+  "new_cohort_requirements": "same ordered genes and the same documented continuous log-scale preparation used before M-ComBat"
+}

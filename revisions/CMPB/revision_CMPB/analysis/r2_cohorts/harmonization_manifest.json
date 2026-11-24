@@ -1,0 +1,20 @@
+{
+  "software": {
+    "inmoose": "0.9.1",
+    "numpy": "2.5.3",
+    "pandas": "3.0.6",
+    "scikit-learn": "1.9.1"
+  },
+  "original_reference_n": 3052,
+  "training_reference_n": 2444,
+  "original_gene_universe": 11145,
+  "training_valid_genes": 11145,
+  "dropped_genes": [],
+  "common_predictive_genes": 7131,
+  "development_train": 2970,
+  "development_validation": 743,
+  "composition_seed": 20261123,
+  "n_repeats": 10,
+  "segregated_companions_per_batch": 16,
+  "sentinels_per_subtype": 2
+}

@@ -1,0 +1,8 @@
+dataset,n,n_labels,labels,platform,split,es_referencia
+GSE96058,3052,4,"Basal-like,HER2-enriched,LumA,LumB",RNAseq,train,True
+TCGA-BRCA,821,4,"Basal-like,HER2-enriched,LumA,LumB",RNAseq,test,False
+GSE25066,464,4,"Basal-like,HER2-enriched,LumA,LumB",GPL96,train,False
+GSE21653,220,4,"Basal-like,HER2-enriched,LumA,LumB",GPL570,test,False
+GSE162228,109,4,"Basal-like,HER2-enriched,LumA,LumB",GPL570,train,False
+GSE1456,102,4,"Basal-like,HER2-enriched,LumA,LumB",GPL96,test,False
+GSE20711,88,4,"Basal-like,HER2-enriched,LumA,LumB",GPL570,train,False

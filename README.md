@@ -14,6 +14,12 @@
   <img src="assets/graphical_abstract.svg" alt="InterGATE graphical abstract" width="100%">
 </p>
 
+## Code for the revised manuscript
+
+The [revised source and reproduction instructions](revisions/CMPB/) cover the additional seed, graph-prior, programme-recovery and external-cohort analyses reported in the revised manuscript. The original analysis is described below.
+
+The [source ZIP](revisions/CMPB/InterGATE_CMPB_revision_source.zip) contains the same source files and manifests as the revision directory. Use its [SHA-256 checksum](revisions/CMPB/InterGATE_CMPB_revision_source.zip.sha256) to verify the download.
+
 InterGATE learns sparse, class-specific networks from a directed HuRI--OmniPath
 prior while jointly preserving graph-derived and tabular predictive signal. The
 study integrates 3,713 tumours from four development cohorts and 1,143 tumours

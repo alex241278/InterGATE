@@ -1,0 +1,88 @@
+{
+  "protocol": "intergate-v8-biology-first-v2-matched-budget",
+  "review_time": true,
+  "raw_external_rows_opened": false,
+  "model_changes": {
+    "GRAPH_SOURCE": [
+      "huri_omnipath",
+      "string"
+    ],
+    "USE_HURI": [
+      true,
+      false
+    ],
+    "USE_OMNIPATH": [
+      true,
+      false
+    ],
+    "USE_STRING": [
+      false,
+      true
+    ],
+    "CLASS_GRAPH_TARGET_EDGES": [
+      null,
+      529
+    ],
+    "CONNECTED_ONLY": [
+      true,
+      false
+    ]
+  },
+  "seeds": [
+    1234,
+    2025,
+    7,
+    99,
+    31337
+  ],
+  "n_train": 2970,
+  "n_validation": 743,
+  "n_external": 0,
+  "measured_genes": 7131,
+  "connected_STRING_genes": 5067,
+  "eligible_directed_edges": 56894,
+  "unique_physical_pairs": 28447,
+  "target_directed_edges": 529,
+  "effective_kappa": 0.009297992758463106,
+  "reciprocal_order": "full directed list sorted by source then target; one arc per eligible structural unit",
+  "certainty": "directional arcs are computational orientations of undirected physical associations",
+  "STRING_input_sha256": {
+    "9606.protein.info.v12.0.txt.gz": "144de4b0d98c6a7dfde6ddc2591cf88657f27b989eadff4f501450c3ed1f0f1c",
+    "9606.protein.physical.links.v12.0.txt.gz": "1ca87209a93cf7685e9c2997fbcfbfc69fedc6a803ccc1df917318a651df0823"
+  },
+  "STRING_minimum_score": 700,
+  "edge_types": [
+    3
+  ],
+  "source_weights": "combined_score / 1000",
+  "implementation": "320516d43f96005c6c0d7ca9d941d5f251c22084e242ad069612657f06d62614",
+  "model_configuration": "32beee1ef0380ff56e225b4ed90b4522f04d62561dbc7fc34a971ba94e846d82",
+  "dataset": {
+    "n_samples": 3713,
+    "n_genes_full": 7131,
+    "genes_sha256": "5df818f52b64a37921de0d931633f4ef28f47f6071a0a7cd65d6bbce030c7bdc",
+    "labels_sha256": "5feec85b71c568760271e40e20f60f82ac5c1881401f1b76c084e0f6898aff16",
+    "cohorts_sha256": "9aa44288a6670087138a2f1b20f38d45c1bebbb65ab62863fe5e918f854845a0",
+    "train_idx_sha256": "a443c1492ed77e1d459dc3a08690e811aef1a2a8fb5c4968aee6f5b1e013d2e1",
+    "val_idx_sha256": "c9659f8268bb3d30f808bd12747df3b8a2cf71b30b8cc83402beaef93f2b3445",
+    "test_idx_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "content_sha256": "211de111d1391867f13a5bef854c85c75e1bcd69c562abb4ac107fc6e135108e"
+  },
+  "original_model_configuration": "9f54bd2fdb700989605fe3f001587e7bfef49e208bd17820635a53399a750ef2",
+  "original_dataset": {
+    "n_samples": 3713,
+    "n_genes_full": 7131,
+    "genes_sha256": "5df818f52b64a37921de0d931633f4ef28f47f6071a0a7cd65d6bbce030c7bdc",
+    "labels_sha256": "5feec85b71c568760271e40e20f60f82ac5c1881401f1b76c084e0f6898aff16",
+    "cohorts_sha256": "9aa44288a6670087138a2f1b20f38d45c1bebbb65ab62863fe5e918f854845a0",
+    "train_idx_sha256": "a443c1492ed77e1d459dc3a08690e811aef1a2a8fb5c4968aee6f5b1e013d2e1",
+    "val_idx_sha256": "c9659f8268bb3d30f808bd12747df3b8a2cf71b30b8cc83402beaef93f2b3445",
+    "test_idx_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "content_sha256": "60697a3efbe8ce7de217e81746a3c0a2b53dbc9b872b026443953f4d044a02cf"
+  },
+  "graph_feature_dimension": 8814,
+  "forward_check_dimensions": [
+    1,
+    4
+  ]
+}

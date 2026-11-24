@@ -1,0 +1,51 @@
+{
+  "original": [
+    1234,
+    2025,
+    7,
+    99,
+    31337
+  ],
+  "new": [
+    10001,
+    10002,
+    10003,
+    10004,
+    10005,
+    10006,
+    10007,
+    10008,
+    10009,
+    10010,
+    10011,
+    10012,
+    10013,
+    10014,
+    10015
+  ],
+  "nested_sizes": [
+    3,
+    5,
+    10,
+    20
+  ],
+  "protocol": "intergate-v8-biology-first-v2-matched-budget",
+  "gpu": "NVIDIA GeForce RTX 3090",
+  "torch": "2.7.1+cu118",
+  "cuda": "11.8",
+  "python": "3.11.9 (main, Jul 15 2026, 13:08:09) [GCC 16.1.1 20260625]",
+  "implementation": "320516d43f96005c6c0d7ca9d941d5f251c22084e242ad069612657f06d62614",
+  "configuration": "9f54bd2fdb700989605fe3f001587e7bfef49e208bd17820635a53399a750ef2",
+  "dataset": {
+    "n_samples": 3713,
+    "n_genes_full": 7131,
+    "genes_sha256": "5df818f52b64a37921de0d931633f4ef28f47f6071a0a7cd65d6bbce030c7bdc",
+    "labels_sha256": "5feec85b71c568760271e40e20f60f82ac5c1881401f1b76c084e0f6898aff16",
+    "cohorts_sha256": "9aa44288a6670087138a2f1b20f38d45c1bebbb65ab62863fe5e918f854845a0",
+    "train_idx_sha256": "a443c1492ed77e1d459dc3a08690e811aef1a2a8fb5c4968aee6f5b1e013d2e1",
+    "val_idx_sha256": "c9659f8268bb3d30f808bd12747df3b8a2cf71b30b8cc83402beaef93f2b3445",
+    "test_idx_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "content_sha256": "60697a3efbe8ce7de217e81746a3c0a2b53dbc9b872b026443953f4d044a02cf"
+  },
+  "external_opened": false
+}

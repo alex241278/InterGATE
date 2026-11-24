@@ -1,0 +1,16 @@
+{
+  "release": "STRING v12.0, Homo sapiens, physical links (undirected)",
+  "urls": [
+    "https://stringdb-downloads.org/download/protein.info.v12.0/9606.protein.info.v12.0.txt.gz",
+    "https://stringdb-downloads.org/download/protein.physical.links.v12.0/9606.protein.physical.links.v12.0.txt.gz"
+  ],
+  "sha256": {
+    "9606.protein.info.v12.0.txt.gz": "144de4b0d98c6a7dfde6ddc2591cf88657f27b989eadff4f501450c3ed1f0f1c",
+    "9606.protein.physical.links.v12.0.txt.gz": "1ca87209a93cf7685e9c2997fbcfbfc69fedc6a803ccc1df917318a651df0823"
+  },
+  "mapping": "exact uppercase STRING preferred name to submitted ordered 7131 genes",
+  "gene_universe": 7131,
+  "matched_proteins": 6912,
+  "unique_physical_pairs_within_universe": 239119,
+  "context_score_baseline_minimum": 700
+}

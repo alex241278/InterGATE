@@ -1,0 +1,36 @@
+\section{Analysis registry}
+\label{sec:registry}
+This retrospective inventory identifies the estimand, the analysis family and the evidence available about timing. The records comprise the versioned local protocol, immutable model and panel manifests, and notebook outputs. A rule fixed before a particular evaluation may have been chosen after earlier results were available. The local locks document that narrower chronology. There was no public prospective registration identified for the complete study. Primary denotes the role of an outcome in the submitted specification. All analyses added for this revision are post hoc with respect to the submission and reuse previously evaluated external cohorts where indicated.
+
+\begin{longtable}{@{}p{.245\linewidth}p{.225\linewidth}p{.475\linewidth}@{}}
+\toprule Analysis or family & Role and timing & Endpoint, reference and multiplicity \\ \midrule
+\endfirsthead
+\toprule Analysis or family & Role and timing & Endpoint, reference and multiplicity \\ \midrule
+\endhead
+Harmonisation QC, platform and subtype structure (Fig. S1) & Descriptive development and external audits & Cohort mixing, variance and PCA diagnostics after reference adjustment. External adjustment uses target-batch expression. No model selection on these diagnostics.\\
+Four intrinsic classes, graph budget and five seeds (S1--S3) & Primary specification & 529 directed edges per class and fit. Mean pairwise Jaccard, union, strict intersection, genes and components. The five runs share the prior, split and training data.\\
+Biological score and module selector & Development-derived specification & The support weight 0.075 was selected using Basal-like development support, seed overlap and fragmentation. The same weights were then applied across classes. The other coefficients and selector settings are part of the submitted specification.\\
+Directional class signatures (S4) & Primary biological validation & Four networks by four signatures by three statistics (48 tests). The fixed 299-edge core has a separate, selected-edge-excluding family of three tests. PAM50 genes excluded.\\
+Directionless signature expansion & Exploratory sensitivity & Farmer sets added only in sensitivity. Primary estimates use the directionally aligned signatures.\\
+Hallmark and C2 gene-set overlap (S5) & Secondary annotation & Each full eligible collection is its own correction family for the specified panel. Terms passing the display filter are reported after adjustment.\\
+Degree-, sign- and type-preserving rewiring (S6) & Secondary topological validation & Coherent-edge fraction against 1,000 rewires, adjusted across four classes.\\
+Development LOCO, checkpoint scores and branch neutralisation & Secondary predictive assessment; neutralisation post hoc & Four held-out development cohorts for tabular benchmarks. Development macro-F1 for checkpoints. Inference interventions on frozen models measure reliance.\\
+Component ablations (S9) & Secondary structural sensitivity & Five seeds per arm. Each arm uses the same eligible graph and budget. Structural summaries are descriptive, with correction within the matched-null biological families.\\
+Thresholds and subsets of five seeds (S8) & Post hoc sensitivity & Edge frequency and strict intersections over subsets of the original five fits. Subsets share runs.\\
+Context score by selector (Fig. S2) & Post hoc control with a local protocol & Four cells, five contrasts and three endpoints. Two-sided paired, null-centred comparisons with BH adjustment across 15 tests.\\
+Export-only budget and full density refits (S14) & Secondary sensitivities & Export-only truncation and complete retraining answer different questions. Five density settings in full refits, development predictive performance, topology and signature recovery. The 1\% primary setting was retained.\\
+Label permutations (S15) & Post hoc control & 49 within-cohort and within-partition permutations. Five statistics on the strict intersection of the same two observed or permuted fits. Minimum attainable upper-tail Monte Carlo $P=0.020$.\\
+Fixed-core external structural effects (S7) & Secondary, after network lock & Spearman correlation for three cohorts and the external meta-analysis (four scopes). Directional agreement and nominal $|Z|$ thresholds are supporting summaries; reciprocal-pair collapse and per-pair FDR are secondary.\\
+Context versus learned external concordance & Exploratory post hoc comparison & Fixed 529-edge factorial panels, comparisons of correlations before and after reciprocal-pair collapse. Differences between correlations were described without a superiority test.\\
+DepMap/Chronos (S10) & Secondary orthogonal analysis & Three expression-defined proxy groups. Lower-tail mean-effect tests across the 24 class--panel--group combinations, with eight focal rows displayed.\\
+Locked external prediction (S11) & Primary predictive endpoint & Macro-F1 on the fixed external block for the uncalibrated ensemble. Secondary outcomes include class-specific F1, balanced accuracy, AUROC and confusion patterns. Bootstrap strata were cohort by true class.\\
+Elastic net, random forest and XGBoost (S11) & Secondary, post hoc fixed-protocol benchmark & Identical development rows, feature universe and external patients. Paired ensemble differences, conditional on the evaluated cohorts.\\
+Probability calibration (S12) & Post hoc secondary & One development-fitted temperature. Repeated internal cross-validation and external changes in log loss, Brier score and calibration error.\\
+XGBoost attribution and panels (S13) & Secondary post hoc analysis; panel locked before attribution evaluation & Directional signature comparisons corrected across four signatures. Includes 288-gene panels, 99-gene stability panel, expression/degree-matched nulls, panel overlap, seven named programmes, full Hallmark/C2 collections, and external attribution rank and sign transport.\\
+S4--S5 layouts and prior connectors & Descriptive visualisations & Node categories derive from the complete core inventory. Added prior connectors are display elements.\\
+Review-time structural controls & Post hoc, R1 & Relative-weight and selector grids, original-seed subsets, prior confidence and degree rankings, source-restricted exports, physical STRING coverage, context rankings and five full STRING refits. Nested 10- and 20-seed fits use the original prior. After each core was fixed, we described the external contrasts already measured on its pairs using the original 214-pair correction family.\\
+Review-time predictive and comparator fits & Post hoc, R1 and editor & Same-split single-branch refits with paired patient bootstrap intervals. Fitted-component masking across five seeds on a fixed validation set. GeSubNet adaptation on a common 397-pair domain; rank and panel summaries are descriptive.\\
+Review-time tissue and batch controls & Post hoc, R2 & Separate reference subtypes, complete-case TCGA adjustment for purity and leukocyte fraction, training-only adjustment, and fixed-patient batch-composition experiments.\\
+Review-time programme contrasts & Post hoc, R2 & Seven two-sided conditional tests corrected together. Covariate-matched sensitivity uses a separate seven-test family.\\
+\bottomrule
+\end{longtable}

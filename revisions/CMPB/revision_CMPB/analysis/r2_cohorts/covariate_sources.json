@@ -1,0 +1,10 @@
+{
+  "TCGA_mastercalls.abs_tables_JSedit.fixed.txt": {
+    "url": "https://api.gdc.cancer.gov/data/4f277128-f793-4354-a13d-30cc7fe9f6b5",
+    "sha256": "f430a975433d82e0098d7405619d4f12a0c765fcd97e7d63cc9b1de7f2d763cd"
+  },
+  "TCGA_all_leuk_estimate.masked.20170107.tsv": {
+    "url": "https://api.gdc.cancer.gov/data/6f75c9d7-5134-4ed1-b8f3-72856c98a4e8",
+    "sha256": "5a8268caedbf8dc98a75be0528d583238d7355761d9fc746e42002f223a982d9"
+  }
+}

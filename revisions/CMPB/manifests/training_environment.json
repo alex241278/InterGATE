@@ -1,0 +1,16 @@
+{
+  "python": "3.11.9",
+  "recorded_packages": {
+    "numpy": "2.4.4",
+    "pandas": "2.3.3",
+    "scipy": "1.17.1",
+    "scikit-learn": "1.9.0",
+    "statsmodels": "0.14.6",
+    "torch": "2.7.1+cu118",
+    "networkx": "3.6.1",
+    "matplotlib": "3.11.0",
+    "requests": "2.34.2",
+    "tqdm": "4.68.4"
+  },
+  "source": "Saved output in the submitted workspace's executed notebook 00, installation check"
+}

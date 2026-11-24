@@ -1,0 +1,27 @@
+notebook,kernel,python_metadata
+data_prepare/00a_download_microarrays.ipynb,InterGATE-T,3.14.6
+data_prepare/00b_download_rnaseq.ipynb,InterGATE-T,3.14.6
+data_prepare/01_union_datasets.ipynb,boosting,3.14.6
+data_prepare/02_preparacion_y_suelo.ipynb,boosting,3.14.6
+data_prepare/03_split_y_mcombat_ref.ipynb,boosting,3.14.6
+data_prepare/04_qc_batch_y_fuga.ipynb,boosting,3.14.6
+data_prepare/05_supplementary_figure_mcombat_qc.ipynb,Bio,3.14.6
+notebooks/00_comprobar_instalacion.ipynb,Torch311,3.11.9
+notebooks/01_validar_runtime_y_evidencia.ipynb,Torch311,3.11.9
+notebooks/02_entrenar_INTERGATE_V8.ipynb,Torch311,3.11.9
+notebooks/03_estabilidad_y_auditoria_V8.ipynb,Torch311,3.11.9
+notebooks/04_baselines_y_ablacion_minima.ipynb,Torch311,3.11.9
+notebooks/05_validacion_biologica_y_depmap.ipynb,Torch311,3.11.9
+notebooks/06_congelar_protocolo_externo.ipynb,Torch311,3.11.9
+notebooks/07_test_externo_bloqueado.ipynb,Torch311,3.11.9
+notebooks/07b_calibracion_posthoc.ipynb,Torch311,3.11.9
+notebooks/08a_benchmark_tabular_pareado_S12.ipynb,Bio,3.14.6
+notebooks/08b_concordancia_estructural_externa.ipynb,Bio,3.14.6
+notebooks/08c_xgboost_vs_intergate_biology.ipynb,Python 3,
+notebooks/09_ablaciones_biologia_score_0075.ipynb,Torch311,3.11.9
+notebooks/10_figuras_definitivas.ipynb,Bio,3.14.6
+notebooks/12_controles_revision_q_permutaciones.ipynb,Torch311,3.11.9
+notebooks/12b_sensibilidad_presupuesto_ExactK.ipynb,Torch311,3.11.9
+notebooks/12c_sensibilidad_kappa_con_reentrenamiento.ipynb,Torch311,3.11.9
+notebooks/12d_generate_kappa_retraining_figure.ipynb,Python 3 (ipykernel),3.14.7
+notebooks/13_generate_supplementary_figures_S2_S3.ipynb,Torch311,3.11.9

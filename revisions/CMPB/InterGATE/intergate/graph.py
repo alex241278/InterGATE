@@ -1,0 +1,1308 @@
+"""
+graph.py
+--------
+Build the backbone protein–protein interaction graph from:
+  - OmniPath (directed, signed)
+  - HuRI / Interactome Atlas (undirected, with optional confidence scores)
+
+Edge types:
+  0 = HuRI (physical PPI)
+  1 = OmniPath stimulation (+)
+  2 = OmniPath inhibition  (−)
+
+This module mirrors the notebook cells 2 / 3.1 / 3.2 / 3.3 exactly, including:
+  - manual SYMBOL→ENSG overrides  (FAM118A, TMEM30A, TMEM30B …)
+  - REQUIRED_CONNECTED_GENES validation gate on every cache load
+  - EXPECTED_CONNECTED_GENES optional reference check
+  - per-dataset HuRI cache with mapping fingerprint
+  - global backbone cache with dedup
+"""
+from __future__ import annotations
+
+import gzip
+import hashlib
+import json
+import re
+from pathlib import Path
+from typing import Dict, List, Optional, Set, Tuple
+
+import numpy as np
+import pandas as pd
+import requests
+
+from intergate.config import CFG as C
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  Gene name utilities  (notebook § 2)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def canonical_gene(g: str) -> str:
+    """Clean a raw gene identifier to a canonical token."""
+    if g is None:
+        return ""
+    g = str(g).strip()
+    g = re.sub(r"^hsa:", "", g, flags=re.I)
+    for sep in ["///", "|", ";", ","]:
+        if sep in g:
+            g = g.split(sep, 1)[0].strip()
+    if " " in g:
+        g = g.split(" ", 1)[0].strip()
+    g = re.sub(r"^(ENSG\d+)\.\d+$", r"\1", g, flags=re.I)
+    g = re.sub(r"^(ENST\d+)\.\d+$", r"\1", g, flags=re.I)
+    return g
+
+
+def canonical_gene_upper(g: str) -> str:
+    return canonical_gene(g).upper()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  Expected-connected-genes reference  (notebook § 3.2)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _normalize_gene_set(obj) -> Optional[Set[str]]:
+    if obj is None:
+        return None
+    if isinstance(obj, pd.DataFrame):
+        col = "gene" if "gene" in obj.columns else obj.columns[-1]
+        vals = obj[col].tolist()
+    elif isinstance(obj, pd.Series):
+        vals = obj.tolist()
+    elif isinstance(obj, (list, tuple, set, np.ndarray, pd.Index)):
+        vals = list(obj)
+    else:
+        return None
+    out = set()
+    for x in vals:
+        s = str(x).strip().upper()
+        if s and s != "NAN":
+            out.add(s)
+    return out
+
+
+def load_expected_connected_genes(
+    csv_path: Optional[Path] = None,
+) -> Optional[Set[str]]:
+    """Load a reference set of expected connected genes from CSV (optional)."""
+    csv_path = csv_path or getattr(C, "EXPECTED_CONNECTED_GENES_CSV", None)
+    if csv_path is not None:
+        p = Path(csv_path)
+        if p.exists():
+            df = pd.read_csv(p)
+            s = _normalize_gene_set(df)
+            if s:
+                print(f"[graph] Expected-connected reference: {len(s)} genes")
+                return s
+    # fallback: genes_usados.csv in cwd
+    p = Path("genes_usados.csv")
+    if p.exists():
+        df = pd.read_csv(p)
+        s = _normalize_gene_set(df)
+        if s:
+            print(f"[graph] Expected-connected reference (cwd): {len(s)} genes")
+            return s
+    return None
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  Cache validation helpers  (notebook § 3.2 / 3.3)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _connected_gene_set(edge_index: np.ndarray, genes_order: List[str]) -> Set[str]:
+    if edge_index.shape[1] == 0:
+        return set()
+    deg = np.bincount(edge_index.reshape(-1), minlength=len(genes_order))
+    return {str(genes_order[i]).strip().upper() for i in np.where(deg > 0)[0]}
+
+
+def _validate_huri_cache(
+    src: np.ndarray,
+    tgt: np.ndarray,
+    genes_order: List[str],
+    required_connected: Optional[Set[str]] = None,
+) -> Tuple[bool, dict]:
+    """Validate a cached HuRI edge array."""
+    if src.ndim != 1 or tgt.ndim != 1 or src.shape[0] != tgt.shape[0]:
+        return False, {"reason": "shape_mismatch"}
+    n = len(genes_order)
+    if src.shape[0] > 0:
+        if src.min() < 0 or tgt.min() < 0 or src.max() >= n or tgt.max() >= n:
+            return False, {"reason": "out_of_bounds", "n_nodes": n}
+
+    ei = np.vstack([src, tgt])
+    connected = _connected_gene_set(ei, genes_order)
+    missing = sorted((required_connected or set()) - connected)
+    return len(missing) == 0, {"connected": len(connected), "missing_required": missing}
+
+
+def _validate_backbone_cache(
+    edge_index: np.ndarray,
+    genes_order: List[str],
+    required_connected: Optional[Set[str]] = None,
+    expected_connected: Optional[Set[str]] = None,
+) -> Tuple[bool, dict]:
+    """Validate a cached backbone .npz (merged HuRI+OmniPath)."""
+    if edge_index.ndim != 2 or edge_index.shape[0] != 2:
+        return False, {"reason": "shape_mismatch"}
+    n = len(genes_order)
+    if edge_index.shape[1] > 0:
+        if edge_index.min() < 0 or edge_index.max() >= n:
+            return False, {"reason": "out_of_bounds", "n_nodes": n}
+
+    connected = _connected_gene_set(edge_index, genes_order)
+    missing_required = sorted((required_connected or set()) - connected)
+
+    missing_expected: list = []
+    extra_expected: list = []
+    if expected_connected is not None:
+        missing_expected = sorted(expected_connected - connected)
+        extra_expected = sorted(connected - expected_connected)
+
+    ok = (
+        len(missing_required) == 0
+        and len(missing_expected) == 0
+        and len(extra_expected) == 0
+    )
+    detail = {
+        "connected_genes": len(connected),
+        "missing_required": missing_required,
+        "n_missing_expected": len(missing_expected),
+        "n_extra_expected": len(extra_expected),
+        "missing_expected_head": missing_expected[:20],
+        "extra_expected_head": extra_expected[:20],
+    }
+    return ok, detail
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  SYMBOL → ENSG mapping  (notebook § 3.2 steps 1 + 2)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _mapping_cache_paths(cache_dir: Path) -> Tuple[Path, Path]:
+    cache_dir = Path(cache_dir)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return (
+        cache_dir / "symbol_to_ensg_cache.json",
+        cache_dir / "symbol_to_ensg_unresolved.json",
+    )
+
+
+def _load_symbol_ensg_cache(cache_dir: Path) -> Tuple[Dict[str, str], Dict[str, bool]]:
+    map_path, unres_path = _mapping_cache_paths(cache_dir)
+    mapping: Dict[str, str] = {}
+    unresolved: Dict[str, bool] = {}
+    if map_path.exists():
+        try:
+            raw = json.loads(map_path.read_text(encoding="utf-8"))
+            mapping = {str(k).upper(): str(v).split(".")[0].upper()
+                       for k, v in raw.items() if v}
+        except Exception:
+            mapping = {}
+    if unres_path.exists():
+        try:
+            raw = json.loads(unres_path.read_text(encoding="utf-8"))
+            unresolved = {str(k).upper(): bool(v) for k, v in raw.items()}
+        except Exception:
+            unresolved = {}
+    return mapping, unresolved
+
+
+def _save_symbol_ensg_cache(
+    cache_dir: Path,
+    mapping: Dict[str, str],
+    unresolved: Dict[str, bool],
+) -> None:
+    map_path, unres_path = _mapping_cache_paths(cache_dir)
+    map_path.write_text(
+        json.dumps(dict(sorted(mapping.items())), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    unres_path.write_text(
+        json.dumps(dict(sorted(unresolved.items())), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def _pick_ensembl_gene(row: dict) -> Optional[str]:
+    ens = row.get("ensembl", None)
+    if isinstance(ens, dict):
+        gene = ens.get("gene")
+        return str(gene).split(".")[0].upper() if gene else None
+    if isinstance(ens, list):
+        vals = []
+        for item in ens:
+            if isinstance(item, dict) and item.get("gene"):
+                vals.append(str(item["gene"]).split(".")[0].upper())
+        vals = sorted(set(v for v in vals if re.match(r"^ENSG\d+$", v)))
+        return vals[0] if vals else None
+    return None
+
+
+def _build_ensg_index(
+    genes: List[str],
+    mapping_cache_dir: Path = C.PIPELINE_CACHE_DIR,
+    manual_overrides: Optional[Dict[str, str]] = None,
+    required_connected: Optional[Set[str]] = None,
+) -> Tuple[Dict[str, str], Dict[str, int], str]:
+    """
+    Build a stable SYMBOL→ENSG mapping with:
+      1. persistent disk cache  (pipeline_cache/)
+      2. multi-scope MyGene queries
+      3. manual overrides       (MANUAL_SYMBOL2ENSG from config)
+
+    Returns (symbol2ensg, ensg2idx, mapping_fingerprint).
+    """
+    manual_overrides = manual_overrides or getattr(C, "MANUAL_SYMBOL2ENSG", {})
+    required_connected = required_connected or getattr(C, "REQUIRED_CONNECTED_GENES", set())
+
+    cleaned = [canonical_gene_upper(g) for g in genes]
+    frac_ensg = float(np.mean([bool(re.match(r"^ENSG\d+$", g)) for g in cleaned]))
+
+    cache_map, cache_unresolved = _load_symbol_ensg_cache(mapping_cache_dir)
+    symbol2ensg: Dict[str, str] = {}
+
+    # ── Direct / cache resolution ──────────────────────────────────────────
+    for g in cleaned:
+        if re.match(r"^ENSG\d+$", g):
+            symbol2ensg[g] = g
+        elif g in cache_map:
+            symbol2ensg[g] = cache_map[g]
+
+    unresolved_symbols = [
+        g for g in cleaned
+        if g not in symbol2ensg and g not in cache_unresolved
+    ]
+
+    # ── MyGene multi-scope lookup ──────────────────────────────────────────
+    if unresolved_symbols and frac_ensg <= 0.9:
+        try:
+            import mygene
+            mg = mygene.MyGeneInfo()
+            batch = 500
+            newly_resolved: Dict[str, str] = {}
+            newly_unresolved: Dict[str, bool] = {}
+
+            for i in range(0, len(unresolved_symbols), batch):
+                q = unresolved_symbols[i : i + batch]
+                res = mg.querymany(
+                    q,
+                    scopes="symbol,alias,ensembl.gene,retired",
+                    fields="ensembl.gene,symbol,alias",
+                    species="human",
+                    as_dataframe=False,
+                    returnall=False,
+                    verbose=False,
+                )
+                for row in res:
+                    query = canonical_gene_upper(row.get("query", ""))
+                    if not query:
+                        continue
+                    ensg = _pick_ensembl_gene(row)
+                    if ensg:
+                        newly_resolved[query] = ensg
+                    else:
+                        newly_unresolved[query] = True
+
+            cache_map.update(newly_resolved)
+            cache_unresolved.update(newly_unresolved)
+            symbol2ensg.update(newly_resolved)
+            _save_symbol_ensg_cache(mapping_cache_dir, cache_map, cache_unresolved)
+            print(
+                f"[map] SYMBOL→ENSG mapped: {len(symbol2ensg)}/{len(cleaned)} "
+                f"| new={len(newly_resolved)} | unresolved={len(newly_unresolved)}"
+            )
+        except Exception as e:
+            if not symbol2ensg:
+                raise RuntimeError(
+                    "Could not map SYMBOL→ENSG via MyGene and cache is empty. "
+                    "Install mygene (`pip install mygene`) and ensure internet access."
+                ) from e
+            print(f"[map] WARNING: MyGene lookup failed, using cache/direct only ({e})")
+    else:
+        print(f"[map] SYMBOL→ENSG from direct/cache: {len(symbol2ensg)}/{len(cleaned)}")
+
+    # ── Manual overrides (ALWAYS applied AFTER mygene) ─────────────────────
+    for sym, ensg in manual_overrides.items():
+        symbol2ensg[sym.upper()] = ensg.split(".")[0].upper()
+    print(f"[map] SYMBOL→ENSG after overrides: {len(symbol2ensg)}")
+
+    for g in sorted(required_connected):
+        ensg = symbol2ensg.get(g.upper())
+        print(f"[map] override check {g} → {ensg}")
+
+    missing_req = [g for g in sorted(required_connected) if g.upper() not in symbol2ensg]
+    assert not missing_req, f"Missing required ENSG mappings: {missing_req}"
+
+    # Persist cache with overrides included
+    cache_map.update({k: v for k, v in symbol2ensg.items()
+                      if re.match(r"^ENSG\d+$", v)})
+    try:
+        _save_symbol_ensg_cache(mapping_cache_dir, cache_map, cache_unresolved)
+    except Exception as e:
+        print(f"[WARN] Could not save SYMBOL2ENSG cache: {e}")
+
+    # ── Build ensg2idx over current gene universe ──────────────────────────
+    ensg2idx: Dict[str, int] = {}
+    for i, g in enumerate(cleaned):
+        ensg = symbol2ensg.get(g)
+        if ensg and ensg not in ensg2idx:
+            ensg2idx[ensg] = i
+
+    mapping_blob = json.dumps(sorted(symbol2ensg.items()), ensure_ascii=False)
+    mapping_fp = hashlib.sha256(mapping_blob.encode("utf-8")).hexdigest()[:12]
+
+    return symbol2ensg, ensg2idx, mapping_fp
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  Helpers
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _download_if_missing(url: str, out_path: Path, chunk_mb: int = 8) -> Path:
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    if out_path.exists() and out_path.stat().st_size > 0:
+        return out_path
+    print(f"[download] {url}")
+    with requests.get(url, stream=True, timeout=180) as r:
+        r.raise_for_status()
+        with open(out_path, "wb") as f:
+            for chunk in r.iter_content(chunk_size=chunk_mb * 1024 * 1024):
+                if chunk:
+                    f.write(chunk)
+    return out_path
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  OmniPath  (notebook § 3.1)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def load_omnipath(
+    genes: List[str],
+    cache_dir: Path = C.OMNIPATH_CACHE_DIR,
+    url: str = C.OMNIPATH_URL,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Download (or load cached) OmniPath interactions and filter to gene universe.
+
+    Returns (edge_index, edge_weight, edge_type).
+    """
+    cache_dir = Path(cache_dir)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    tsv_path = cache_dir / "omnipath_interactions.tsv"
+
+    if not tsv_path.exists() or tsv_path.stat().st_size < 10_000:
+        print("[OmniPath] Downloading TSV …")
+        r = requests.get(url, timeout=180)
+        r.raise_for_status()
+        tsv_path.write_bytes(r.content)
+
+    print(f"[OmniPath] TSV: {tsv_path} | size: {tsv_path.stat().st_size}")
+    df = pd.read_csv(tsv_path, sep="\t")
+    print(f"[OmniPath] columns: {df.columns.tolist()}")
+
+    src_col = "source_genesymbol" if "source_genesymbol" in df.columns else "source"
+    tgt_col = "target_genesymbol" if "target_genesymbol" in df.columns else "target"
+
+    need = [
+        src_col, tgt_col,
+        "is_stimulation", "is_inhibition",
+        "consensus_stimulation", "consensus_inhibition",
+    ]
+    df = df[need].copy()
+    df[src_col] = df[src_col].astype(str).str.strip().str.upper()
+    df[tgt_col] = df[tgt_col].astype(str).str.strip().str.upper()
+
+    gene2idx = {str(g).upper(): i for i, g in enumerate(genes)}
+    mask = df[src_col].isin(gene2idx) & df[tgt_col].isin(gene2idx)
+    df = df.loc[mask].reset_index(drop=True)
+    print(f"[OmniPath] interactions within gene universe: {len(df)}")
+
+    src_idx = df[src_col].map(gene2idx).astype(np.int64).values
+    tgt_idx = df[tgt_col].map(gene2idx).astype(np.int64).values
+    edge_index = np.vstack([src_idx, tgt_idx]).astype(np.int64)
+
+    stim = (df["consensus_stimulation"].astype(bool) | df["is_stimulation"].astype(bool)).values
+    inh = (df["consensus_inhibition"].astype(bool) | df["is_inhibition"].astype(bool)).values
+
+    edge_weight = np.ones(len(df), dtype=np.float32)
+    edge_weight[inh & ~stim] = -1.0
+    edge_weight[stim & ~inh] = +1.0
+
+    # edge types: 1=OP(+), 2=OP(-)
+    edge_type = np.ones(len(df), dtype=np.int64)
+    edge_type[inh & ~stim] = 2
+
+    print(f"[OmniPath] edge_index: {edge_index.shape}, "
+          f"edge_weight: {edge_weight.shape}, edge_type: {edge_type.shape}")
+    return edge_index, edge_weight, edge_type
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  HuRI / Interactome Atlas  (notebook § 3.2)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _extract_ensg(field: str) -> Optional[str]:
+    m = re.search(r"ENSG\d{11}", str(field))
+    return m.group(0) if m else None
+
+
+def _extract_author_score(field: str) -> Optional[float]:
+    m = re.search(r"([0-9]*\.[0-9]+|[0-9]+)", str(field))
+    return float(m.group(1)) if m else None
+
+
+def load_huri(
+    genes: List[str],
+    datasets: List[str] = C.HURI_DATASETS,
+    cache_dir: Path = C.HURI_CACHE_DIR,
+    use_confidence: bool = C.USE_HURI_CONFIDENCE,
+    min_score: float = C.HURI_MIN_SCORE,
+    default_weight: float = C.HURI_DEFAULT_WEIGHT,
+    force_rebuild: bool = C.FORCE_REBUILD_HURI_CACHE,
+    required_connected: Optional[Set[str]] = None,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Load HuRI physical PPI edges for the provided gene universe.
+    Includes REQUIRED_CONNECTED_GENES validation on every cache load.
+
+    Returns (edge_index, edge_weight, edge_type).
+    """
+    required_connected = required_connected or getattr(C, "REQUIRED_CONNECTED_GENES", set())
+
+    cache_dir = Path(cache_dir)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    symbol2ensg, ensg2idx, mapping_fp = _build_ensg_index(genes)
+    ensg_set = set(ensg2idx.keys())
+    print(f"[HuRI] ENSG IDs in universe: {len(ensg_set)}")
+
+    all_src, all_tgt, all_w = [], [], []
+
+    for ds in datasets:
+        ds = str(ds)
+        tsv_url = f"https://interactome-atlas.org/data/{ds}.tsv"
+        psi_url = f"https://interactome-atlas.org/data/{ds}.psi"
+        tsv_path = cache_dir / f"{ds}.tsv"
+        psi_path = cache_dir / f"{ds}.psi"
+
+        _download_if_missing(tsv_url, tsv_path)
+        use_score = use_confidence and (ds.lower() == "huri")
+
+        # ----- WITH confidence scores -----
+        if use_score:
+            _download_if_missing(psi_url, psi_path)
+            cache_npz = cache_dir / (
+                f"{ds}.filtered.with_score.min{min_score}"
+                f".impute_median.map{mapping_fp}.npz"
+            )
+
+            use_cached = False
+            if cache_npz.exists() and not force_rebuild:
+                z = np.load(cache_npz)
+                src_tmp = z["src"].astype(np.int64)
+                tgt_tmp = z["tgt"].astype(np.int64)
+                w_tmp = z["w"].astype(np.float32)
+
+                ok, detail = _validate_huri_cache(
+                    src_tmp, tgt_tmp, genes,
+                    required_connected=required_connected,
+                )
+                if ok:
+                    src, tgt, w = src_tmp, tgt_tmp, w_tmp
+                    use_cached = True
+                    print(f"[HuRI/{ds}] cache (score) valid: {len(w)} edges")
+                else:
+                    print(f"[HuRI/{ds}] cache (score) IGNORED: {detail}")
+
+            if not use_cached:
+                print(f"[HuRI/{ds}] parsing PSI for author scores …")
+                pair2score: dict = {}
+                missing_pairs: set = set()
+
+                with open(psi_path, "r", encoding="utf-8", errors="ignore") as f:
+                    for line in f:
+                        cols = line.rstrip("\n").split("\t")
+                        if len(cols) < 15:
+                            continue
+                        ea = _extract_ensg(cols[2])
+                        eb = _extract_ensg(cols[3])
+                        if ea is None or eb is None:
+                            continue
+                        ea, eb = ea.upper(), eb.upper()
+                        if ea not in ensg_set or eb not in ensg_set:
+                            continue
+                        key = (ea, eb) if ea <= eb else (eb, ea)
+                        sc = _extract_author_score(cols[14])
+                        if sc is None:
+                            missing_pairs.add(key)
+                            continue
+                        sc = float(sc)
+                        if sc < float(min_score):
+                            continue
+                        prev = pair2score.get(key, -1.0)
+                        if sc > prev:
+                            pair2score[key] = sc
+
+                median_sc = (
+                    float(np.median(np.fromiter(pair2score.values(), dtype=np.float32)))
+                    if pair2score else float(default_weight)
+                )
+                imputed = 0
+                for key in missing_pairs:
+                    if key in pair2score:
+                        continue
+                    if median_sc < float(min_score):
+                        continue
+                    pair2score[key] = median_sc
+                    imputed += 1
+
+                print(
+                    f"[HuRI/{ds}] scores: obs={len(pair2score)-imputed} | "
+                    f"missing_seen={len(missing_pairs)} | imputed={imputed} | "
+                    f"median={median_sc:.4f}"
+                )
+
+                src_l, tgt_l, w_l = [], [], []
+                for (ea, eb), sc in pair2score.items():
+                    i, j = ensg2idx[ea], ensg2idx[eb]
+                    src_l += [i, j]
+                    tgt_l += [j, i]
+                    w_l += [float(sc), float(sc)]
+
+                src = np.array(src_l, dtype=np.int64)
+                tgt = np.array(tgt_l, dtype=np.int64)
+                w = np.array(w_l, dtype=np.float32)
+                np.savez_compressed(cache_npz, src=src, tgt=tgt, w=w)
+                print(f"[HuRI/{ds}] PSI→cache: {len(w)} edges (bidirectional)")
+
+        # ----- WITHOUT confidence scores -----
+        else:
+            cache_npz = cache_dir / f"{ds}.filtered.no_score.map{mapping_fp}.npz"
+
+            use_cached = False
+            if cache_npz.exists() and not force_rebuild:
+                z = np.load(cache_npz)
+                src_tmp = z["src"].astype(np.int64)
+                tgt_tmp = z["tgt"].astype(np.int64)
+                w_tmp = z["w"].astype(np.float32)
+
+                ok, detail = _validate_huri_cache(
+                    src_tmp, tgt_tmp, genes,
+                    required_connected=required_connected,
+                )
+                if ok:
+                    src, tgt, w = src_tmp, tgt_tmp, w_tmp
+                    use_cached = True
+                    print(f"[HuRI/{ds}] cache (no_score) valid: {len(w)} edges")
+                else:
+                    print(f"[HuRI/{ds}] cache (no_score) IGNORED: {detail}")
+
+            if not use_cached:
+                df_h = pd.read_csv(
+                    tsv_path, sep="\t", header=None, names=["ensg_a", "ensg_b"]
+                )
+                df_h["ensg_a"] = df_h["ensg_a"].astype(str).str.split(".").str[0].str.upper()
+                df_h["ensg_b"] = df_h["ensg_b"].astype(str).str.split(".").str[0].str.upper()
+                df_h = df_h[df_h["ensg_a"].isin(ensg_set) & df_h["ensg_b"].isin(ensg_set)]
+                print(f"[HuRI/{ds}] interactions in universe: {len(df_h)}")
+
+                src_l, tgt_l, w_l = [], [], []
+                for ea, eb in zip(df_h["ensg_a"].values, df_h["ensg_b"].values):
+                    i, j = ensg2idx[ea], ensg2idx[eb]
+                    src_l += [i, j]
+                    tgt_l += [j, i]
+                    w_l += [float(default_weight), float(default_weight)]
+
+                src = np.array(src_l, dtype=np.int64)
+                tgt = np.array(tgt_l, dtype=np.int64)
+                w = np.array(w_l, dtype=np.float32)
+                np.savez_compressed(cache_npz, src=src, tgt=tgt, w=w)
+                print(f"[HuRI/{ds}] TSV→cache: {len(w)} edges (bidirectional)")
+
+        all_src.append(src)
+        all_tgt.append(tgt)
+        all_w.append(w)
+
+    # ── Merge datasets ─────────────────────────────────────────────────────
+    if not all_w:
+        print("[HuRI] no edges loaded (empty).")
+        return np.zeros((2, 0), np.int64), np.zeros(0, np.float32), np.zeros(0, np.int64)
+
+    src_all = np.concatenate(all_src)
+    tgt_all = np.concatenate(all_tgt)
+    w_all = np.concatenate(all_w)
+
+    edge_index = np.vstack([src_all, tgt_all]).astype(np.int64)
+    edge_weight = w_all.astype(np.float32)
+    edge_type = np.zeros(edge_weight.shape[0], dtype=np.int64)  # 0 = HuRI
+
+    print(
+        f"[HuRI/Interactome] edges={edge_index.shape[1]} | "
+        f"w min/median/max={edge_weight.min():.3f}/"
+        f"{np.median(edge_weight):.3f}/{edge_weight.max():.3f}"
+    )
+
+    deg = np.bincount(edge_index.reshape(-1), minlength=len(genes))
+    genes_upper = [str(g).upper() for g in genes]
+    connected = {genes_upper[i] for i in np.where(deg > 0)[0]}
+    print(f"[HuRI only] connected genes (deg>0): {len(connected)} "
+          f"({len(connected)/len(genes)*100:.1f}%)")
+    for g in sorted(required_connected):
+        print(f"[HuRI only check] {g}: {g.upper() in connected}")
+
+    return edge_index, edge_weight, edge_type
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  Deduplication  (notebook § 3.3)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ════════════════════════════════════════════════════════════════════════
+#  STRING  (portado desde el pipeline plano; ver PORT_NOTES.md)
+# ════════════════════════════════════════════════════════════════════════
+
+def _read_string_table(path: Path, *, sep=None) -> pd.DataFrame:
+    """
+    Lee tablas de STRING de forma robusta.
+
+    IMPORTANTE:
+    - protein.links usa separación por espacios.
+    - protein.info usa tabulador, porque la columna annotation puede contener espacios.
+    - protein.aliases usa tabulador.
+
+    El bug corregido aquí era leer protein.info con sep=r"\\s+", lo que rompe
+    las filas cuando la anotación contiene espacios y causa ParserError.
+    """
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"No encuentro el fichero STRING: {path}")
+
+    name = path.name.lower()
+    if sep is None:
+        if "protein.links" in name or "links" in name:
+            sep = r"\s+"
+        elif "protein.info" in name or "info" in name:
+            sep = "\t"
+        elif "protein.alias" in name or "alias" in name:
+            sep = "\t"
+        else:
+            sep = "\t"
+
+    return pd.read_csv(
+        path,
+        sep=sep,
+        compression="infer",
+        low_memory=False,
+    )
+
+
+def _detect_col(df: pd.DataFrame, candidates: List[str], kind: str) -> str:
+    cols = list(df.columns)
+    lower = {str(c).lower().lstrip("#"): c for c in cols}
+    for c in candidates:
+        key = c.lower().lstrip("#")
+        if key in lower:
+            return lower[key]
+    raise ValueError(f"No encuentro columna {kind}. Columnas disponibles: {cols}")
+
+
+def _build_string_protein_to_gene(genes: List[str]) -> Dict[str, str]:
+    """
+    Build STRING protein-id -> gene-symbol mapping.
+
+    Preferred mapping: STRING protein.info file (protein_external_id -> preferred_name).
+    Optional fallback: STRING aliases file (string_protein_id -> alias).
+    Only aliases/names present in the current expression gene universe are retained.
+    """
+    gene_set = {canonical_gene_upper(g) for g in genes}
+    protein_to_gene: Dict[str, str] = {}
+
+    info_file = getattr(C, "STRING_INFO_FILE", None)
+    if info_file is not None:
+        info_file = Path(info_file)
+        if info_file.exists():
+            df_info = _read_string_table(info_file)
+            protein_col = _detect_col(
+                df_info,
+                ["protein_external_id", "#protein_external_id", "string_protein_id", "protein_id"],
+                "STRING protein id",
+            )
+            name_col = _detect_col(
+                df_info,
+                ["preferred_name", "preferredName", "gene", "symbol"],
+                "STRING preferred gene name",
+            )
+            df_info[protein_col] = df_info[protein_col].astype(str)
+            df_info[name_col] = df_info[name_col].map(canonical_gene_upper)
+            df_info = df_info[df_info[name_col].isin(gene_set)]
+            protein_to_gene.update(
+                df_info.drop_duplicates(protein_col).set_index(protein_col)[name_col].to_dict()
+            )
+            print(f"[STRING] info mapping proteins→genes: {len(protein_to_gene)}")
+        else:
+            print(f"[STRING] WARNING: STRING_INFO_FILE no existe: {info_file}")
+
+    alias_file = getattr(C, "STRING_ALIAS_FILE", None)
+    if alias_file is not None:
+        alias_file = Path(alias_file)
+        if alias_file.exists():
+            df_alias = _read_string_table(alias_file)
+            protein_col = _detect_col(
+                df_alias,
+                ["string_protein_id", "#string_protein_id", "protein_external_id", "protein_id"],
+                "STRING protein id",
+            )
+            alias_col = _detect_col(
+                df_alias,
+                ["alias", "gene", "symbol", "preferred_name"],
+                "STRING alias/gene symbol",
+            )
+            df_alias[protein_col] = df_alias[protein_col].astype(str)
+            df_alias[alias_col] = df_alias[alias_col].map(canonical_gene_upper)
+            df_alias = df_alias[df_alias[alias_col].isin(gene_set)].copy()
+
+            cand = (
+                df_alias.groupby(protein_col)[alias_col]
+                .agg(lambda x: sorted(set(x)))
+                .reset_index()
+            )
+            added = 0
+            for pid, aliases in zip(cand[protein_col], cand[alias_col]):
+                if pid in protein_to_gene:
+                    continue
+                if len(aliases) == 1:
+                    protein_to_gene[str(pid)] = aliases[0]
+                    added += 1
+            print(f"[STRING] alias fallback added proteins→genes: {added}")
+        else:
+            print(f"[STRING] WARNING: STRING_ALIAS_FILE no existe: {alias_file}")
+
+    if not protein_to_gene:
+        raise ValueError(
+            "No se pudo construir protein→gene para STRING. Define al menos "
+            "CFG.STRING_INFO_FILE o CFG.STRING_ALIAS_FILE con ficheros STRING válidos."
+        )
+    return protein_to_gene
+
+
+def load_string(
+    genes: List[str],
+    links_file: Optional[Path] = None,
+    cache_dir: Path = None,
+    min_score: Optional[int] = None,
+    weight_scale: Optional[float] = None,
+    max_weight: Optional[float] = None,
+    force_rebuild: bool = False,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Load a STRING graph restricted to the current gene universe.
+
+    STRING is treated as an undirected positive association graph:
+      - each interaction is duplicated in both directions
+      - edge_type = 0, compatible with the physical/functional prior channel
+      - edge_weight = combined_score / STRING_WEIGHT_SCALE, clipped by STRING_MAX_WEIGHT
+
+    The default STRING_MAX_WEIGHT=0.95 intentionally lets OmniPath edges (|w|=1)
+    win exact duplicate (src,tgt) cases during deduplication, preserving signed/directed
+    OmniPath information when CFG.GRAPH_SOURCE="string_omnipath".
+    """
+    cache_dir = Path(cache_dir or getattr(C, "STRING_CACHE_DIR", C.DATA_DIR / "string_cache"))
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    links_file = links_file or getattr(C, "STRING_LINKS_FILE", None)
+    if links_file is None:
+        raise ValueError("Define CFG.STRING_LINKS_FILE con 9606.protein.links*.txt.gz")
+    links_file = Path(links_file)
+    if not links_file.exists():
+        raise FileNotFoundError(f"No encuentro CFG.STRING_LINKS_FILE: {links_file}")
+
+    min_score = int(min_score if min_score is not None else getattr(C, "STRING_MIN_SCORE", 700))
+    weight_scale = float(weight_scale if weight_scale is not None else getattr(C, "STRING_WEIGHT_SCALE", 1000.0))
+    max_weight = float(max_weight if max_weight is not None else getattr(C, "STRING_MAX_WEIGHT", 0.95))
+    force_rebuild = bool(force_rebuild or getattr(C, "FORCE_REBUILD_STRING_CACHE", False))
+
+    gene_sig = hashlib.md5("||".join(map(str, genes)).encode("utf-8")).hexdigest()[:16]
+    cfg_blob = json.dumps({
+        "links": str(links_file),
+        "info": str(getattr(C, "STRING_INFO_FILE", None)),
+        "alias": str(getattr(C, "STRING_ALIAS_FILE", None)),
+        "min_score": min_score,
+        "weight_scale": weight_scale,
+        "max_weight": max_weight,
+    }, sort_keys=True)
+    cfg_sig = hashlib.sha256(cfg_blob.encode("utf-8")).hexdigest()[:12]
+    cache_npz = cache_dir / f"string__n{len(genes)}__sig{gene_sig}__cfg{cfg_sig}.npz"
+
+    if cache_npz.exists() and not force_rebuild:
+        z = np.load(cache_npz)
+        edge_index = z["edge_index"].astype(np.int64)
+        edge_weight = z["edge_weight"].astype(np.float32)
+        edge_type = z["edge_type"].astype(np.int64)
+        print(f"[STRING cache] loaded: {cache_npz.name} | edges={edge_index.shape[1]}")
+        return edge_index, edge_weight, edge_type
+
+    print(f"[STRING] Reading links: {links_file}")
+    df = _read_string_table(links_file, sep=r"\s+")
+    p1_col = _detect_col(df, ["protein1", "#protein1"], "STRING protein1")
+    p2_col = _detect_col(df, ["protein2"], "STRING protein2")
+    score_col = _detect_col(df, ["combined_score", "score"], "STRING combined score")
+
+    df = df[[p1_col, p2_col, score_col]].copy()
+    df[score_col] = pd.to_numeric(df[score_col], errors="coerce")
+    df = df.dropna(subset=[score_col])
+    df = df[df[score_col] >= float(min_score)].copy()
+    print(f"[STRING] links after combined_score >= {min_score}: {len(df)}")
+
+    protein_to_gene = _build_string_protein_to_gene(genes)
+    gene2idx = {canonical_gene_upper(g): i for i, g in enumerate(genes)}
+
+    df["g1"] = df[p1_col].astype(str).map(protein_to_gene)
+    df["g2"] = df[p2_col].astype(str).map(protein_to_gene)
+    df = df.dropna(subset=["g1", "g2"])
+    df = df[df["g1"] != df["g2"]].copy()
+    df = df[df["g1"].isin(gene2idx) & df["g2"].isin(gene2idx)].copy()
+    print(f"[STRING] mapped links within gene universe: {len(df)}")
+
+    if df.empty:
+        return np.zeros((2, 0), np.int64), np.zeros(0, np.float32), np.zeros(0, np.int64)
+
+    src = df["g1"].map(gene2idx).astype(np.int64).values
+    tgt = df["g2"].map(gene2idx).astype(np.int64).values
+    w = (df[score_col].astype(np.float32).values / weight_scale).astype(np.float32)
+    if max_weight is not None:
+        w = np.minimum(w, np.float32(max_weight)).astype(np.float32)
+
+    # STRING is undirected, so expand to directed edges for message passing.
+    src2 = np.concatenate([src, tgt]).astype(np.int64)
+    tgt2 = np.concatenate([tgt, src]).astype(np.int64)
+    w2 = np.concatenate([w, w]).astype(np.float32)
+
+    edge_index = np.vstack([src2, tgt2]).astype(np.int64)
+    edge_weight = w2
+    # Tipo de arista de STRING. En el pipeline plano original era 0, el mismo
+    # que HuRI, porque nunca se combinaban (los presets eran huri_omnipath O
+    # string_omnipath). Con GRAPH_SOURCE="all" si coexisten, y compartir tipo
+    # las haria indistinguibles para el gating por tipo de arista. Por eso
+    # STRING usa su propio tipo (CFG.STRING_EDGE_TYPE, por defecto 3).
+    _string_et = int(getattr(C, "STRING_EDGE_TYPE", 3))
+    edge_type = np.full(edge_weight.shape[0], _string_et, dtype=np.int64)
+
+    np.savez_compressed(
+        cache_npz,
+        edge_index=edge_index.astype(np.int64),
+        edge_weight=edge_weight.astype(np.float32),
+        edge_type=edge_type.astype(np.int64),
+    )
+    print(f"[STRING cache] saved: {cache_npz.name}")
+    print(
+        f"[STRING] edge_index={edge_index.shape} | "
+        f"w min/median/max={edge_weight.min():.3f}/"
+        f"{np.median(edge_weight):.3f}/{edge_weight.max():.3f}"
+    )
+    return edge_index, edge_weight, edge_type
+
+
+def resolve_backbone_sources(
+    graph_source: Optional[str] = None,
+    use_omnipath: Optional[bool] = None,
+    use_huri: Optional[bool] = None,
+    use_string: Optional[bool] = None,
+) -> Tuple[bool, bool, bool, str]:
+    """
+    Resolve which prior sources to use.
+
+    Returns
+    -------
+    use_omnipath, use_huri, use_string, graph_source
+    """
+    src = str(graph_source or getattr(C, "GRAPH_SOURCE", "custom")).lower().strip()
+    src = src.replace("+", "_").replace("-", "_").replace(" ", "_")
+
+    presets = {
+        "huri_omnipath":   (True,  True,  False),
+        "huri_op":         (True,  True,  False),
+        "original":        (True,  True,  False),
+        "string_omnipath": (True,  False, True),
+        "string_op":       (True,  False, True),
+        "string":          (False, False, True),
+        "omnipath":        (True,  False, False),
+        "op":              (True,  False, False),
+        "huri":            (False, True,  False),
+        "all":             (True,  True,  True),
+        "custom":          (None,  None,  None),
+    }
+    if src not in presets:
+        raise ValueError(
+            f"CFG.GRAPH_SOURCE={graph_source!r} no soportado. Usa uno de: "
+            f"{sorted(presets)}"
+        )
+
+    p_op, p_huri, p_string = presets[src]
+    if p_op is None:
+        p_op = bool(getattr(C, "USE_OMNIPATH", True))
+        p_huri = bool(getattr(C, "USE_HURI", True))
+        p_string = bool(getattr(C, "USE_STRING", False))
+
+    if use_omnipath is not None:
+        p_op = bool(use_omnipath)
+    if use_huri is not None:
+        p_huri = bool(use_huri)
+    if use_string is not None:
+        p_string = bool(use_string)
+
+    return bool(p_op), bool(p_huri), bool(p_string), src
+
+
+def dedup_edges(
+    edge_index: np.ndarray,
+    edge_weight: np.ndarray,
+    edge_type: np.ndarray,
+    prefer_type: int = 0,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Deduplicate by (src, tgt), keeping the edge with highest |weight|.
+    On ties prefer `prefer_type` (default: HuRI=0).
+    """
+    if edge_index.ndim != 2 or edge_index.shape[0] != 2:
+        raise ValueError(f"edge_index must be (2,E), got {edge_index.shape}")
+    E = edge_index.shape[1]
+    if edge_weight.shape[0] != E or edge_type.shape[0] != E:
+        raise ValueError(
+            f"Dimension mismatch: E={E}, ew={edge_weight.shape}, et={edge_type.shape}"
+        )
+    if E == 0:
+        return edge_index, edge_weight.astype(np.float32), edge_type.astype(np.int64)
+
+    ei0 = edge_index[0].astype(np.int64, copy=False)
+    ei1 = edge_index[1].astype(np.int64, copy=False)
+    ew = edge_weight.astype(np.float32, copy=False)
+    et = edge_type.astype(np.int64, copy=False)
+
+    key = (ei0 << np.int64(32)) | ei1
+    order = np.argsort(key, kind="mergesort")
+    key_s = key[order]
+    src_s = ei0[order]
+    tgt_s = ei1[order]
+    ew_s = ew[order]
+    et_s = et[order]
+
+    keep_src, keep_tgt, keep_w, keep_t = [], [], [], []
+    i = 0
+    while i < E:
+        j = i + 1
+        bsrc, btgt, bw, bt = src_s[i], tgt_s[i], ew_s[i], et_s[i]
+        while j < E and key_s[j] == key_s[i]:
+            cw, ct = ew_s[j], et_s[j]
+            if abs(cw) > abs(bw) or (
+                abs(cw) == abs(bw) and ct == prefer_type and bt != prefer_type
+            ):
+                bsrc, btgt, bw, bt = src_s[j], tgt_s[j], cw, ct
+            j += 1
+        keep_src.append(bsrc)
+        keep_tgt.append(btgt)
+        keep_w.append(bw)
+        keep_t.append(bt)
+        i = j
+
+    ei2 = np.vstack([np.asarray(keep_src, np.int64), np.asarray(keep_tgt, np.int64)])
+    ew2 = np.asarray(keep_w, np.float32)
+    et2 = np.asarray(keep_t, np.int64)
+    return ei2, ew2, et2
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  High-level backbone builder  (notebook § 3.3  merge + backbone cache)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def build_backbone(
+    genes: List[str],
+    use_omnipath: Optional[bool] = None,
+    use_huri: Optional[bool] = None,
+    use_string: Optional[bool] = None,
+    graph_source: Optional[str] = None,
+    backbone_cache_dir: Optional[Path] = None,
+    force_rebuild: bool = False,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Build the full backbone graph, with:
+      - per-source loading  (OmniPath, HuRI, STRING)
+      - source selection via ``graph_source`` / ``CFG.GRAPH_SOURCE``:
+        "huri_omnipath" (defecto) | "string_omnipath" | "all" |
+        "huri" | "omnipath" | "string" | "custom"
+      - deduplication on (src, tgt)
+      - global backbone cache with validation
+      - REQUIRED_CONNECTED_GENES gate
+      - EXPECTED_CONNECTED_GENES optional reference check
+
+    Returns (edge_index, edge_weight, edge_type).
+    """
+    backbone_cache_dir = Path(
+        backbone_cache_dir
+        or getattr(C, "BACKBONE_CACHE_DIR", C.DATA_DIR / "backbone_cache")
+    )
+    backbone_cache_dir.mkdir(parents=True, exist_ok=True)
+    force_rebuild = force_rebuild or getattr(C, "FORCE_REBUILD_BACKBONE_CACHE", False)
+
+    use_omnipath, use_huri, use_string, graph_source = resolve_backbone_sources(
+        graph_source=graph_source,
+        use_omnipath=use_omnipath,
+        use_huri=use_huri,
+        use_string=use_string,
+    )
+    print(f"[graph] GRAPH_SOURCE={graph_source} | "
+          f"OmniPath={use_omnipath} HuRI={use_huri} STRING={use_string}")
+
+    required_connected = getattr(C, "REQUIRED_CONNECTED_GENES", set())
+    expected_connected = load_expected_connected_genes()
+
+    # ── Try backbone cache ─────────────────────────────────────────────────
+    gene_sig = hashlib.md5(
+        "||".join(map(str, genes)).encode("utf-8")
+    ).hexdigest()[:16]
+    score_flag = 1 if C.USE_HURI_CONFIDENCE else 0
+    min_score_tag = str(C.HURI_MIN_SCORE).replace(".", "p")
+    string_min_tag = str(getattr(C, "STRING_MIN_SCORE", "NA")).replace(".", "p")
+    cache_npz = backbone_cache_dir / (
+        f"backbone_global__n{len(genes)}__sig{gene_sig}"
+        f"__op{int(bool(use_omnipath))}__huri{int(bool(use_huri))}"
+        f"__string{int(bool(use_string))}"
+        f"__score{score_flag}__min{min_score_tag}__smin{string_min_tag}.npz"
+    )
+
+    if cache_npz.exists() and not force_rebuild:
+        z = np.load(cache_npz)
+        ei_tmp = z["edge_index"].astype(np.int64)
+        ew_tmp = z["edge_weight"].astype(np.float32)
+        et_tmp = z["edge_type"].astype(np.int64)
+
+        ok, detail = _validate_backbone_cache(
+            ei_tmp, genes,
+            required_connected=required_connected,
+            expected_connected=expected_connected,
+        )
+        if ok:
+            print(f"[Backbone cache] loaded: {cache_npz.name}")
+            _print_backbone_summary(ei_tmp, genes, required_connected, expected_connected)
+            return ei_tmp, ew_tmp, et_tmp
+        else:
+            print(f"[Backbone cache] IGNORED: {detail}")
+
+    # ── Build from sources ─────────────────────────────────────────────────
+    ei_parts, ew_parts, et_parts = [], [], []
+
+    if use_omnipath:
+        ei, ew, et = load_omnipath(genes)
+        ei_parts.append(ei)
+        ew_parts.append(ew)
+        et_parts.append(et)
+        print(f"[Merge input] OmniPath edges={ei.shape[1]}")
+
+    if use_huri:
+        ei, ew, et = load_huri(genes, required_connected=required_connected)
+        ei_parts.append(ei)
+        ew_parts.append(ew)
+        et_parts.append(et)
+        print(f"[Merge input] HuRI edges={ei.shape[1]}")
+
+    if use_string:
+        ei, ew, et = load_string(genes)
+        ei_parts.append(ei)
+        ew_parts.append(ew)
+        et_parts.append(et)
+        print(f"[Merge input] STRING edges={ei.shape[1]}")
+
+    if not ei_parts:
+        return np.zeros((2, 0), np.int64), np.zeros(0, np.float32), np.zeros(0, np.int64)
+
+    edge_index = np.hstack(ei_parts)
+    edge_weight = np.concatenate(ew_parts).astype(np.float32)
+    edge_type = np.concatenate(et_parts).astype(np.int64)
+
+    assert edge_index.shape[1] == edge_weight.shape[0] == edge_type.shape[0], (
+        f"MERGE mismatch: ei={edge_index.shape}, ew={edge_weight.shape}, et={edge_type.shape}"
+    )
+
+    print(f"[graph] Before dedup: {edge_index.shape[1]} edges")
+    edge_index, edge_weight, edge_type = dedup_edges(
+        edge_index, edge_weight, edge_type, prefer_type=0,
+    )
+    print(f"[graph] After  dedup: {edge_index.shape[1]} edges")
+
+    # ── Save backbone cache ────────────────────────────────────────────────
+    np.savez_compressed(
+        cache_npz,
+        edge_index=edge_index.astype(np.int64),
+        edge_weight=edge_weight.astype(np.float32),
+        edge_type=edge_type.astype(np.int64),
+    )
+    print(f"[Backbone cache] saved: {cache_npz.name}")
+
+    _print_backbone_summary(edge_index, genes, required_connected, expected_connected)
+    return edge_index, edge_weight, edge_type
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  Generic local edge-list loader for reusable/self-contained runs
+# ═══════════════════════════════════════════════════════════════════════════
+
+def load_edge_list_prior(
+    edge_tsv: Path,
+    genes: List[str],
+    source_col: Optional[str] = None,
+    target_col: Optional[str] = None,
+    weight_col: Optional[str] = None,
+    sign_col: Optional[str] = None,
+    type_col: Optional[str] = None,
+    directed_col: Optional[str] = None,
+    add_reverse_for_undirected: bool = True,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Load a user-supplied prior graph from a TSV/CSV edge list.
+
+    This helper is independent of OmniPath/HuRI downloads. It makes the package
+    usable with the bundled toy prior or with an external disease-specific edge
+    list supplied by the user.
+
+    Expected columns are flexible. Source columns can be named ``source``,
+    ``src``, ``from``, ``regulator`` or ``gene_a``. Target columns can be named
+    ``target``, ``tgt``, ``to``, ``regulated`` or ``gene_b``. Optional columns
+    are ``weight``, ``sign``, ``type`` and ``directed``.
+    """
+    edge_tsv = Path(edge_tsv)
+    if not edge_tsv.exists():
+        raise FileNotFoundError(f"Prior edge list not found: {edge_tsv}")
+
+    df = pd.read_csv(edge_tsv, sep=None, engine="python")
+    if df.empty:
+        return np.zeros((2, 0), np.int64), np.zeros(0, np.float32), np.zeros(0, np.int64)
+
+    cols = {str(c).strip().lower(): c for c in df.columns}
+
+    def pick(explicit: Optional[str], aliases: List[str]) -> str:
+        if explicit:
+            if explicit in df.columns:
+                return explicit
+            key = explicit.strip().lower()
+            if key in cols:
+                return cols[key]
+            raise ValueError(f"Column '{explicit}' not found in {edge_tsv}")
+        for a in aliases:
+            if a in cols:
+                return cols[a]
+        raise ValueError(
+            f"Could not infer source/target columns in {edge_tsv}. "
+            f"Available columns: {list(df.columns)}"
+        )
+
+    src_c = pick(source_col, ["source", "src", "from", "regulator", "gene_a", "gene1"])
+    tgt_c = pick(target_col, ["target", "tgt", "to", "regulated", "gene_b", "gene2"])
+
+    def optional(explicit: Optional[str], aliases: List[str]) -> Optional[str]:
+        if explicit:
+            if explicit in df.columns:
+                return explicit
+            key = explicit.strip().lower()
+            if key in cols:
+                return cols[key]
+            raise ValueError(f"Column '{explicit}' not found in {edge_tsv}")
+        for a in aliases:
+            if a in cols:
+                return cols[a]
+        return None
+
+    weight_c = optional(weight_col, ["weight", "score", "confidence"])
+    sign_c = optional(sign_col, ["sign", "effect", "direction", "interaction_sign"])
+    type_c = optional(type_col, ["type", "edge_type", "interaction", "source_db"])
+    directed_c = optional(directed_col, ["directed", "is_directed"])
+
+    gene_to_idx = {canonical_gene_upper(g): i for i, g in enumerate(genes)}
+
+    def sign_to_float(x) -> float:
+        s = str(x).strip().lower()
+        if s in {"-", "-1", "negative", "inhibition", "inhibitory", "repression", "down"}:
+            return -1.0
+        if s in {"+", "+1", "1", "positive", "activation", "stimulation", "up"}:
+            return 1.0
+        return 1.0
+
+    def type_to_int(type_val, signed_weight: float) -> int:
+        s = str(type_val).strip().lower() if type_val is not None else ""
+        if any(k in s for k in ["inhib", "repress", "negative", "down"]):
+            return 2
+        if any(k in s for k in ["activ", "stim", "positive", "up"]):
+            return 1
+        if signed_weight < 0:
+            return 2
+        if signed_weight > 0 and (sign_c is not None or type_c is not None):
+            return 1
+        return 0
+
+    edges: list[tuple[int, int, float, int]] = []
+    dropped = 0
+    for _, row in df.iterrows():
+        s_name = canonical_gene_upper(row[src_c])
+        t_name = canonical_gene_upper(row[tgt_c])
+        if not s_name or not t_name or s_name not in gene_to_idx or t_name not in gene_to_idx:
+            dropped += 1
+            continue
+        src_i, tgt_i = gene_to_idx[s_name], gene_to_idx[t_name]
+        if src_i == tgt_i:
+            continue
+
+        if weight_c is not None and pd.notna(row[weight_c]):
+            try:
+                w = float(row[weight_c])
+            except Exception:
+                w = 1.0
+        else:
+            w = 1.0
+        if sign_c is not None and pd.notna(row[sign_c]):
+            w = abs(w) * sign_to_float(row[sign_c])
+
+        et = type_to_int(row[type_c] if type_c is not None else None, w)
+        edges.append((src_i, tgt_i, w, et))
+
+        if add_reverse_for_undirected and directed_c is not None:
+            directed_value = str(row[directed_c]).strip().lower()
+            if directed_value in {"false", "0", "no", "n", "undirected", "none", "nan"}:
+                edges.append((tgt_i, src_i, w, et))
+
+    if not edges:
+        raise ValueError(
+            f"No usable edges from {edge_tsv}; {dropped} rows did not match the expression genes."
+        )
+
+    edge_index = np.array([[e[0] for e in edges], [e[1] for e in edges]], dtype=np.int64)
+    edge_weight = np.array([e[2] for e in edges], dtype=np.float32)
+    edge_type = np.array([e[3] for e in edges], dtype=np.int64)
+    edge_index, edge_weight, edge_type = dedup_edges(edge_index, edge_weight, edge_type, prefer_type=0)
+    print(f"[edge-list prior] {edge_index.shape[1]} usable edges loaded from {edge_tsv}")
+    if dropped:
+        print(f"[edge-list prior] dropped {dropped} rows with genes absent from expression matrix")
+    return edge_index, edge_weight, edge_type
+
+
+def _print_backbone_summary(
+    edge_index: np.ndarray,
+    genes: List[str],
+    required_connected: Set[str],
+    expected_connected: Optional[Set[str]],
+) -> None:
+    """Print connectivity summary (matches notebook § 3.3 final checks)."""
+    deg = np.bincount(edge_index.reshape(-1), minlength=len(genes))
+    connected = _connected_gene_set(edge_index, genes)
+    print(
+        f"[Backbone HuRI+OmniPath] connected genes (deg>0): "
+        f"{len(connected)} ({len(connected)/len(genes)*100:.1f}%)"
+    )
+
+    for g in sorted(required_connected):
+        print(f"[Backbone check] {g}: {g.upper() in connected}")
+
+    if expected_connected is not None:
+        missing = sorted(expected_connected - connected)
+        extra = sorted(connected - expected_connected)
+        print(f"[Backbone refcheck] missing={len(missing)} extra={len(extra)}")
+        if missing:
+            print(f"[Backbone refcheck] missing head: {missing[:20]}")
+        if extra:
+            print(f"[Backbone refcheck] extra head: {extra[:20]}")

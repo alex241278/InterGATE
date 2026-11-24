@@ -1,0 +1,30 @@
+{
+  "checked_on": "2026-11-23",
+  "anonymous_https_code_page": 200,
+  "anonymous_github_api_public": true,
+  "default_branch": "main",
+  "commit": "e9ca9a7ac563758278557a6bbfaa11cc78cb54a1",
+  "commit_timestamp": "2026-09-05T12:24:40Z",
+  "tree": "b9f9276ee9b57757af576f256819a846e7a57640",
+  "immutable_url": "https://github.com/alex241278/InterGATE/tree/e9ca9a7ac563758278557a6bbfaa11cc78cb54a1",
+  "immutable_archive": "https://codeload.github.com/alex241278/InterGATE/tar.gz/e9ca9a7ac563758278557a6bbfaa11cc78cb54a1",
+  "git_tags": [],
+  "github_releases": [],
+  "public_version_in_citation_cff": "8.1.0",
+  "public_tree_file_count": 117,
+  "complete_tree": true,
+  "license": "MIT",
+  "license_url": "https://github.com/alex241278/InterGATE/blob/e9ca9a7ac563758278557a6bbfaa11cc78cb54a1/LICENSE",
+  "license_sha256": "deb8aee222e8b6016a257dcaeb51da01f56ebd9b5512afce3995721d02478ddb",
+  "original_author_working_tree_modules_identical_before_revision": 38,
+  "historical_main_config_identical": true,
+  "both_xgboost_protocol_files_identical": true,
+  "public_environment_note": "environment.yml with Python 3.11 and ranged pyproject dependencies including torch>=2.3,<3; 10 exact versions recorded separately by the original executed training notebook.",
+  "public_tests_run_on_unchanged_commit": {
+    "tests/check_notebook_contract.py": "passed",
+    "tests/test_protocol_alignment.py": "passed",
+    "tests/test_current_synthetic.py": "passed",
+    "tests/test_xgboost_biology_contrast.py": "failed: floating-point comparison omitted tied null contrasts; fixed in the local revision archive using integer counts"
+  },
+  "revision_changes_published_at_this_commit": false
+}
