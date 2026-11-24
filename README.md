@@ -198,7 +198,6 @@ InterGATE/
 ├── scripts/                # preflight and dependency-aware runner
 ├── source_data/            # compact audited inputs for publication figures
 ├── tests/                  # protocol, notebook, and synthetic guards
-├── docs/                   # execution and manuscript-code alignment
 └── assets/                 # graphical abstract in SVG, PDF, and PNG
 ```
 
@@ -214,13 +213,6 @@ make test
 The audit checks source syntax, notebook cleanliness and order, portable paths,
 protocol constants, Exact-\(K\), the 0.25-to-0.075 score timeline, graphical
 abstract values, and train-only evidence invariance.
-
-The claim-to-code crosswalk is maintained in
-[`docs/MANUSCRIPT_CODE_ALIGNMENT.md`](docs/MANUSCRIPT_CODE_ALIGNMENT.md).
-The completed repository and publication-package checks are recorded in
-[`docs/REPOSITORY_AUDIT.md`](docs/REPOSITORY_AUDIT.md).
-The full-retraining density review and manuscript integration are recorded in
-[`docs/AUDITORIA_12C_Y_ALINEACION.md`](docs/AUDITORIA_12C_Y_ALINEACION.md).
 
 ## Citation and licence
 

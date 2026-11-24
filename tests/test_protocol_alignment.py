@@ -156,8 +156,6 @@ def main() -> None:
         (ROOT / path).read_text(encoding="utf-8")
         for path in (
             "README.md",
-            "docs/PROTOCOL_ALIGNMENT.md",
-            "docs/MANUSCRIPT_CODE_ALIGNMENT.md",
             "assets/graphical_abstract.svg",
         )
     )
